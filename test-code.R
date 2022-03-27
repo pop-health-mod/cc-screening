@@ -37,31 +37,24 @@ parameters {
   
   vector[C] re_country; 
   real<lower = 0, upper = 10> sd_re_country;
-  
   vector[S] re_survey; 
   real<lower = 0, upper = 10> sd_re_survey;
+  vector[R] re_region; 
+  real<lower = 0, upper = 10> sd_re_region;
   
-  //real beta_time;
   vector[R] rs_time;
   real<lower = 0, upper = 10> sd_rs_region;
   real slope_time; 
-  
-  //vector[C] rs_pgm; 
-  //real<lower = 0, upper = 10> sd_rs_country_pgm;
-  //real slope_pgm;
   
   row_vector[A] beta_age;
   row_vector[G] beta_gni;
   
   real<lower = -5, upper = 5> beta_hiv;
-  //real beta_recall_hiv;
-  vector[C] rs_hiv;
+  vector[C] rs_hiv_country;
+  vector[R] rs_hiv_region;
   real<lower = 0, upper = 10> sd_rs_country_hiv;
+  real<lower = 0, upper = 10> sd_rs_region_hiv;
   
-  //real beta_whs;
-  //real beta_pgm;
-  
-  //real beta_time_length;
   row_vector[A + 1] beta_time_length;
 }
 
@@ -73,21 +66,14 @@ transformed parameters{
   
   hiv_effect[1] = 0;
   hiv_effect[2] = 1;
-  //hiv_effect[2] = beta_hiv;
   for(n in 1:N) {
-    logit_prd[n] = alpha + re_country[country[n]] 
-    + re_survey[survey[n]] 
-    + rs_time[region[n]] * time[n] 
-    //+ rs_pgm[country[n]] * pgm[n]
-    //+ beta_time * time[n] 
-    + beta_age * age[, n]
-    + beta_gni * gni[, n]
-    //+ beta_pgm * pgm[n]
-    //+ beta_whs * whs[n]
-    + beta_time_length * time_length[, n];
+    logit_prd[n] = alpha + re_region[region[n]] + re_country[country[n]] + re_survey[survey[n]] 
+                  + rs_time[region[n]] * time[n] 
+                  + beta_age * age[, n]
+                  + beta_gni * gni[, n]
+                  + beta_time_length * time_length[, n];
     for (h in 1:n_hiv) {
-      prd[n, h] = inv_logit(logit_prd[n] + rs_hiv[country[n]]*hiv_effect[h]);
-      //+ beta_recall_hiv * time_length[n] * hiv_effect[h]; 
+      prd[n, h] = inv_logit(logit_prd[n] + (beta_hiv + rs_hiv_region[region[n]] + rs_hiv_country[country[n]]) * hiv_effect[h]);
     }
     // if we have no information on HIV, we do a weighted average
     logit_prob[n] = logit(prd[n, ] * prv_wgt[, n]);
@@ -107,30 +93,30 @@ model {
   // Random Intercepts by country 
   re_country ~ normal(0, sd_re_country); 
   sd_re_country ~ cauchy(0, 2) T[0, 10]; // half-Chauchy prior
+
+  // Random Intercepts by region
+  re_region ~ normal(0, sd_re_region); 
+  sd_re_region ~ cauchy(0, 2) T[0, 10]; // half-Chauchy prior
   
   // Random Slopes
   rs_time ~ normal(slope_time, sd_rs_region); 
   slope_time ~ normal(0, 10);
   sd_rs_region ~ cauchy(0, 2) T[0, 10];
   
-  rs_hiv ~ normal(beta_hiv, sd_rs_country_hiv); 
-  beta_hiv ~ normal(0, 10);
-  sd_rs_country_hiv ~ cauchy(0, 2) T[0, 10];
   
-  //rs_pgm ~ normal(slope_time, sd_rs_country_pgm); 
-  //slope_pgm ~ normal(0, 10);
-  //sd_rs_country_pgm ~ cauchy(0, 1) T[0, 10];
+  beta_hiv ~ normal(0, 10);
+  rs_hiv_region ~ normal(beta_hiv, sd_rs_region_hiv); 
+  sd_rs_region_hiv ~ cauchy(0, 2) T[0, 10];
+  
+  rs_hiv_country ~ normal(0, sd_rs_country_hiv); 
+  sd_rs_country_hiv ~ cauchy(0, 2) T[0, 10];
+
   
   // Fixed Effects
   beta_age ~ normal(0, 5);
   beta_time_length ~ normal(0, 2);
-  //beta_time ~ normal(0, 2);
-  //beta_whs ~ normal(0, 5);
-  //beta_recall_hiv ~ normal(0, 0.1);
   beta_gni ~ normal(0, 5);
-  //beta_hiv ~ normal(0, 5);
-  //beta_pgm ~ normal(0, 5);
-  
+
   //likelihood
   num ~ binomial_logit(den, logit_prob);  
 }
@@ -140,13 +126,14 @@ generated quantities {
   vector[N] pred_num;
   vector[N] pred_prob;
   
+  
   for (n in 1:N) { //can try to vectorize all - didnt work
     //generates log-likelihood for model validation
     log_lik[n] = binomial_logit_lpmf(num[n] | den[n], logit_prob[n]); 
     
     //for posterior predictive checks
     pred_num[n] = binomial_rng(den[n], inv_logit(logit_prob[n]));
-    pred_prob[n] = pred_num[n]/den[n];
+    pred_prob[n] = pred_num[n] / den[n];
   }
 }
 '
