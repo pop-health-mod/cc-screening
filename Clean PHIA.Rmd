@@ -1,0 +1,1289 @@
+---
+title: "PHIA"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(survey.adjust.domain.lonely=TRUE)
+options(survey.lonely.psu="adjust")
+```
+
+```{r import}
+library(dplyr)
+library(ggplot2)
+library(survey)
+source("df_functions.R")
+#load("Cleaned PHIA")
+
+ethai <- read.csv("~/Documents/GitHub/HPV-HIV-Model/PHIA/Ethiopia/Adult Interview/ephia2017adultind.csv")
+mlai <- read.csv("~/Documents/GitHub/HPV-HIV-Model/PHIA/Malawi/Adult Interview/Mphia2015adultind.csv")
+rwai <- read.csv("~/Documents/GitHub/HPV-HIV-Model/PHIA/Rwanda/Adult Interview/rphia2018adultind.csv")
+tzai <- read.csv("~/Documents/GitHub/HPV-HIV-Model/PHIA/Tanzania/Adult Interview/this2016adultind.csv")
+zmai <- read.csv("~/Documents/GitHub/HPV-HIV-Model/PHIA/Zambia/Adult Interview/Zamphia2016adultind.csv")
+zwai <- read.csv("~/Documents/GitHub/HPV-HIV-Model/PHIA/Zimbabwe/Adult Interview/zimphia2015adultind.csv")
+```
+
+# clean data
+```{r Ethiopia}
+# rep_weights leaving them out for now <- names(ethai)[grep("intwt",names(ethai))[-1]] 
+ethphia <- select(ethai, 
+                  c(psu = varunit,
+                    weight = intwt0,
+                    # rep_weights leaving them out for now,
+                    strata = varstrat,
+                    interview_month = surveystmonth,
+                    Year = surveystyear,
+                    age,
+                    agegr = agegroup5population,
+                    sex = gender,
+                    region,
+                    urban_rural = urban , #no rural categories for ethiopia so all areas will be considered urban
+                    wealth_quint = wealthquintile,
+                    wealth_score = wealthscorecont,
+                    edu = education,
+                    ever_married = evermar,
+                    marital_status = curmar,
+                    most_recent_condom_use = partlastcndm1,
+                    sex_partners_past_year = part12monum,
+                    #cervical cancer questions
+                    ever_cc_tested = cervcntst,
+                    last_cc_test_m = cervcntm,
+                    last_cc_test_y = cervcnty,
+                    last_cc_test_m_eth = cervcntm_eth ,
+                    last_cc_test_y_eth = cervcnty_eth,
+                    last_cc_test_fu = cercnfwup,
+                    hivstat = hivstatusfinal))
+
+#changing coding of some of the variables
+##determinants
+#adjusting education variable to match dhs variables 
+ethphia$edu[ethphia$edu == 1] <- 0
+ethphia$edu[ethphia$edu == 2] <- 1
+ethphia$edu[ethphia$edu == 3] <- 2
+ethphia$edu[ethphia$edu == 4] <- 3
+ethphia$edu[ethphia$edu == 99] <- NA
+
+#marital_status recode
+ethphia$marital_status[ethphia$marital_status == ". "] <- NA
+ethphia$marital_status <- as.numeric(ethphia$marital_status)
+ethphia$marital_status[ethphia$ever_married == "2 "] <- 0
+ethphia$marital_status[ethphia$marital_status == 5] <- 4
+ethphia$marital_status[ethphia$marital_status == -8] <- NA
+ethphia$marital_status[ethphia$marital_status == -9] <- NA
+
+#condom use at last sex recode
+ethphia$most_recent_condom_use[ethphia$most_recent_condom_use == ". "] <- NA
+ethphia$most_recent_condom_use <- as.numeric(ethphia$most_recent_condom_use)
+ethphia$most_recent_condom_use[ethphia$most_recent_condom_use == 2] <- 0
+ethphia$most_recent_condom_use[ethphia$most_recent_condom_use == -8] <- NA
+ethphia$most_recent_condom_use[ethphia$most_recent_condom_use == -9] <- NA
+
+#number of sex partners in the past year recode
+ethphia$sex_partners_past_year[ethphia$sex_partners_past_year == ". "] <- NA
+ethphia$sex_partners_past_year <- as.numeric(ethphia$sex_partners_past_year)
+ethphia$sex_partners_past_year[ethphia$sex_partners_past_year == -7] <- NA
+
+#recode wealth_quint
+ethphia$wealth_quint[ethphia$wealth_quint == ". "] <- NA
+ethphia$wealth_quint <- as.numeric(ethphia$wealth_quint)
+
+ethphia$hivstat[ethphia$hivstat == 2] <- 0
+ethphia$hivstat[ethphia$hivstat == 99] <- NA
+
+##cervical cancer questions
+ethphia$ever_cc_tested[ethphia$ever_cc_tested == "1 "] <- 1
+ethphia$ever_cc_tested[ethphia$ever_cc_tested == "2 "] <- 0
+ethphia$ever_cc_tested[ethphia$ever_cc_tested == "-8 "] <- NA
+ethphia$ever_cc_tested[ethphia$ever_cc_tested == "-9 "] <- NA
+ethphia$ever_cc_tested[ethphia$ever_cc_tested == ". "] <- NA
+ethphia$ever_cc_tested <- as.numeric(ethphia$ever_cc_tested)
+
+ethphia$last_cc_test_fu[ethphia$last_cc_test_fu == "1 "] <- 1
+ethphia$last_cc_test_fu[ethphia$last_cc_test_fu == "2 "] <- 0
+ethphia$last_cc_test_fu[ethphia$last_cc_test_fu == "-8 "] <- NA
+ethphia$last_cc_test_fu[ethphia$last_cc_test_fu == "-9 "] <- NA
+ethphia$last_cc_test_fu[ethphia$last_cc_test_fu == ". "] <- NA
+ethphia$last_cc_test_fu <- as.numeric(ethphia$last_cc_test_fu)
+
+#last_cc_test recode
+ethphia$last_cc_test_m[ethphia$last_cc_test_m == ". "] <- NA
+ethphia$last_cc_test_y[ethphia$last_cc_test_y == ". "] <- NA
+ethphia$last_cc_test_m <- as.numeric(ethphia$last_cc_test_m)
+ethphia$last_cc_test_y <- as.numeric(ethphia$last_cc_test_y)
+#if missing month but not missing year assume that month is July, if both missing give NA values
+for(i in 1:nrow(ethphia)){
+  if(!is.na(ethphia$last_cc_test_m[i]) & !is.na(ethphia$last_cc_test_y[i]) & ethphia$last_cc_test_m[i] == -8 & ethphia$last_cc_test_m[i] != -8){
+    ethphia$last_cc_test_m[i] <- 7
+  }else if(!is.na(ethphia$last_cc_test_m[i]) & !is.na(ethphia$last_cc_test_y[i]) & ethphia$last_cc_test_m[i] == -8 & ethphia$last_cc_test_m[i] == -8){
+    ethphia$last_cc_test_m[i] <- NA
+    ethphia$last_cc_test_y[i] <- NA
+  }
+}
+
+#create last_cc_test categorical variable to harmonize with other surveys 
+ethphia$last_cc_test <- NA
+for(i in 1:nrow(ethphia)){
+  if(!is.na(ethphia$last_cc_test_m[i]) & !is.na(ethphia$last_cc_test_y[i]) & !is.na(ethphia$interview_month[i]) & !is.na(ethphia$Year[i])){
+    month <- ethphia$interview_month[i] - ethphia$last_cc_test_m[i] 
+    year <- ethphia$Year[i] - ethphia$last_cc_test_y[i] 
+    ethphia$last_cc_test[i] <- year + month/12
+  }
+}
+
+#create cc test past 3 year question among everyone
+ethphia$cc_test_past_3y[ethphia$ever_cc_tested == 0] <- 0
+ethphia$cc_test_past_3y[ethphia$ever_cc_tested == 1 & ethphia$last_cc_test > 3] <- 0
+ethphia$cc_test_past_3y[ethphia$ever_cc_tested == 1 & ethphia$last_cc_test <= 3] <- 1
+
+ethphia$cc_test_past_1y[ethphia$ever_cc_tested == 0] <- 0
+ethphia$cc_test_past_1y[ethphia$ever_cc_tested == 1 & ethphia$last_cc_test > 1] <- 0
+ethphia$cc_test_past_1y[ethphia$ever_cc_tested == 1 & ethphia$last_cc_test <= 1] <- 1
+
+ethphia$cc_test_past_5y[ethphia$ever_cc_tested == 0] <- 0
+ethphia$cc_test_past_5y[ethphia$ever_cc_tested == 1 & ethphia$last_cc_test > 5] <- 0
+ethphia$cc_test_past_5y[ethphia$ever_cc_tested == 1 & ethphia$last_cc_test <= 5] <- 1
+
+ethphia$Country <- "Ethiopia"
+ethphia$df = "ethphia"
+ethphia$psu <- paste0(ethphia$psu, "-", ethphia$strata)
+
+#find year at the midpoint of data
+ethphia$cmc <- 12*(ethphia$Year - 1900) + ethphia$interview_month
+design <- svydesign(data = ethphia, weights = ~weight, id = ~psu) #may need to add strata
+svymean(~cmc, design = design, vartype = "ci", method = "beta") #1416.6 is in 2018
+
+unique(ethphia$last_cc_test)
+
+View(ethphia[,c("last_cc_test_m", "last_cc_test_y", "last_cc_test")])
+
+table(ethphia$hivstat, ethphia$ever_cc_tested)
+sum(table(ethphia$hivstat, ethphia$ever_cc_tested))
+table(ethphia$hivstat, ethphia$ever_cc_tested)/sum(table(ethphia$hivstat, ethphia$ever_cc_tested))
+58/(58+353)
+
+table(mlphia$hivstat, mlphia$ever_cc_tested)
+sum(table(mlphia$hivstat, mlphia$ever_cc_tested))
+table(mlphia$hivstat, mlphia$ever_cc_tested)/sum(table(mlphia$hivstat, mlphia$ever_cc_tested))
+
+table(rwphia$hivstat, rwphia$ever_cc_tested)
+sum(table(rwphia$hivstat, rwphia$ever_cc_tested))
+table(rwphia$hivstat, rwphia$ever_cc_tested)/sum(table(rwphia$hivstat, rwphia$ever_cc_tested))
+```
+```{r Malawi}
+# rep_weights leaving them out for now <- names(mlai)[grep("intwt",names(mlai))[-1]] 
+mlphia <- select(mlai, 
+                  c(psu = varunit,
+                    weight = intwt0,
+                    # rep_weights leaving them out for now,
+                    strata = varstrat,
+                    interview_date = surveystdt,
+                    age,
+                    agegr = agegroup5population,
+                    sex = gender,
+                    region,
+                    urban_rural = urban,
+                    wealth_quint = wealthquintile,
+                    wealth_score = wealthscorecont,
+                    edu = education,
+                    ever_married = evermar,
+                    marital_status = curmar,
+                    most_recent_condom_use = partlastcndm1,
+                    sex_partners_past_year = part12monum,
+                    #cervical cancer questions
+                    ever_cc_tested = cervcntst,
+                    last_cc_test_m = cervcntsm,
+                    last_cc_test_y = cervcntsy,
+                    last_cc_test_result = cervcnrslt,
+                    last_cc_test_fu = cercnfwup,
+                    cc_treated = cervcntrt,
+                    #hiv
+                    hivstat = hivstatusfinal))
+#recode
+##determinants
+#adjusting education variable to match dhs variables 
+mlphia$edu[mlphia$edu == 1] <- 0
+mlphia$edu[mlphia$edu == 2] <- 1
+mlphia$edu[mlphia$edu == 3] <- 2
+mlphia$edu[mlphia$edu == 4] <- 3
+mlphia$edu[mlphia$edu == 99] <- NA
+
+#marital_status recode
+mlphia$marital_status[mlphia$marital_status == ". "] <- NA
+mlphia$marital_status <- as.numeric(mlphia$marital_status)
+mlphia$marital_status[mlphia$ever_married == "2 "] <- 0
+mlphia$marital_status[mlphia$marital_status == 5] <- 4
+mlphia$marital_status[mlphia$marital_status == -8] <- NA
+mlphia$marital_status[mlphia$marital_status == -9] <- NA
+
+#condom use at last sex recode
+mlphia$most_recent_condom_use[mlphia$most_recent_condom_use == ". "] <- NA
+mlphia$most_recent_condom_use <- as.numeric(mlphia$most_recent_condom_use)
+mlphia$most_recent_condom_use[mlphia$most_recent_condom_use == 2] <- 0
+mlphia$most_recent_condom_use[mlphia$most_recent_condom_use == -8] <- NA
+mlphia$most_recent_condom_use[mlphia$most_recent_condom_use == -9] <- NA
+
+#number of sex partners in the past year recode
+mlphia$sex_partners_past_year[mlphia$sex_partners_past_year == ". "] <- NA
+mlphia$sex_partners_past_year <- as.numeric(mlphia$sex_partners_past_year)
+mlphia$sex_partners_past_year[mlphia$sex_partners_past_year == -7] <- NA
+
+#recode wealth_quint
+mlphia$wealth_quint[mlphia$wealth_quint == ". "] <- NA
+mlphia$wealth_quint <- as.numeric(mlphia$wealth_quint)
+
+mlphia$hivstat[mlphia$hivstat == 2] <- 0
+mlphia$hivstat[mlphia$hivstat == 99] <- NA
+
+##cervical cancer questions
+#changing coding of some of the variables
+mlphia$ever_cc_tested[mlphia$ever_cc_tested == "1 "] <- 1
+mlphia$ever_cc_tested[mlphia$ever_cc_tested == "2 "] <- 0
+mlphia$ever_cc_tested[mlphia$ever_cc_tested == "-8 "] <- NA
+mlphia$ever_cc_tested[mlphia$ever_cc_tested == "-9 "] <- NA
+mlphia$ever_cc_tested[mlphia$ever_cc_tested == ". "] <- NA
+mlphia$ever_cc_tested <- as.numeric(mlphia$ever_cc_tested)
+
+mlphia$last_cc_test_result[mlphia$last_cc_test_result == "-8 "] <- NA
+mlphia$last_cc_test_result[mlphia$last_cc_test_result == ". "] <- NA
+mlphia$last_cc_test_result <- as.numeric(mlphia$last_cc_test_result)
+
+#create var for received cc test results
+mlphia$last_cc_test_result_received[!is.na(mlphia$last_cc_test_result)] <- 0
+mlphia$last_cc_test_result_received[mlphia$last_cc_test_result != 5] <- 1
+
+#create another column for positive cc test result (defined as abnormal/positive)
+mlphia$last_cc_test_pos[!is.na(mlphia$last_cc_test_result)] <- 0
+mlphia$last_cc_test_pos[mlphia$last_cc_test_result == 2] <- 1
+mlphia$last_cc_test_pos[mlphia$last_cc_test_result == 5] <- NA #will make did not receive results NA
+
+mlphia$last_cc_test_fu[mlphia$last_cc_test_fu == "1 "] <- 1
+mlphia$last_cc_test_fu[mlphia$last_cc_test_fu == "2 "] <- 0
+mlphia$last_cc_test_fu[mlphia$last_cc_test_fu == "-8 "] <- NA
+mlphia$last_cc_test_fu[mlphia$last_cc_test_fu == "-9 "] <- NA
+mlphia$last_cc_test_fu[mlphia$last_cc_test_fu == ". "] <- NA
+mlphia$last_cc_test_fu <- as.numeric(mlphia$last_cc_test_fu)
+
+mlphia$cc_treated[mlphia$cc_treated == ". "] <- NA
+mlphia$cc_treated <- as.numeric(mlphia$cc_treated)
+
+#creating variable for treated on same day or not (among those treated)
+mlphia$treated_sameday[mlphia$cc_treated == 1] <- 1
+mlphia$treated_sameday[mlphia$cc_treated == 2] <- 0
+
+#recoding the rest of cc treated to make in a binary variable
+mlphia$cc_treated[mlphia$cc_treated == 3] <- 0
+mlphia$cc_treated[mlphia$cc_treated == 2] <- 1
+mlphia$cc_treated[mlphia$cc_treated == -8] <- NA #double check I shouldn't keep as dk
+mlphia$cc_treated[mlphia$cc_treated == -9] <- NA
+
+#last_cc_test recode
+mlphia$last_cc_test_m[mlphia$last_cc_test_m == ". "] <- NA
+mlphia$last_cc_test_y[mlphia$last_cc_test_y == ". "] <- NA
+mlphia$last_cc_test_m <- as.numeric(mlphia$last_cc_test_m)
+mlphia$last_cc_test_y <- as.numeric(mlphia$last_cc_test_y)
+#if missing month but not missing year assume that month is July, if both missing give NA values
+for(i in 1:nrow(mlphia)){
+  if(!is.na(mlphia$last_cc_test_m[i]) & !is.na(mlphia$last_cc_test_y[i]) & mlphia$last_cc_test_m[i] == -8 & mlphia$last_cc_test_m[i] != -8){
+    mlphia$last_cc_test_m[i] <- 7
+  }else if(!is.na(mlphia$last_cc_test_m[i]) & !is.na(mlphia$last_cc_test_y[i]) & mlphia$last_cc_test_m[i] == -8 & mlphia$last_cc_test_m[i] == -8){
+    mlphia$last_cc_test_m[i] <- NA
+    mlphia$last_cc_test_y[i] <- NA
+  }
+}
+
+#split interview_date into month and year
+mlphia$interview_date <- as.Date(mlphia$interview_date)
+mlphia$interview_month <- as.numeric(format(mlphia$interview_date, "%m"))
+mlphia$interview_year <- as.numeric(format(mlphia$interview_date, "%Y"))
+
+#create last_cc_test categorical variable to harmonize with other surveys 
+mlphia$last_cc_test <- NA
+for(i in 1:nrow(mlphia)){
+  if(!is.na(mlphia$last_cc_test_m[i]) & !is.na(mlphia$last_cc_test_y[i]) & !is.na(mlphia$interview_month[i]) & !is.na(mlphia$interview_year[i])){
+    month <- mlphia$interview_month[i] - mlphia$last_cc_test_m[i] 
+    year <- mlphia$interview_year[i] - mlphia$last_cc_test_y[i] 
+    mlphia$last_cc_test[i] <- year + month/12
+  }
+}
+
+#create cc test past 3 year question among everyone
+mlphia$cc_test_past_3y[mlphia$ever_cc_tested == 0] <- 0
+mlphia$cc_test_past_3y[mlphia$ever_cc_tested == 1 & mlphia$last_cc_test > 3] <- 0
+mlphia$cc_test_past_3y[mlphia$ever_cc_tested == 1 & mlphia$last_cc_test <= 3] <- 1
+
+mlphia$cc_test_past_1y[mlphia$ever_cc_tested == 0] <- 0
+mlphia$cc_test_past_1y[mlphia$ever_cc_tested == 1 & mlphia$last_cc_test > 1] <- 0
+mlphia$cc_test_past_1y[mlphia$ever_cc_tested == 1 & mlphia$last_cc_test <= 1] <- 1
+
+mlphia$cc_test_past_5y[mlphia$ever_cc_tested == 0] <- 0
+mlphia$cc_test_past_5y[mlphia$ever_cc_tested == 1 & mlphia$last_cc_test > 5] <- 0
+mlphia$cc_test_past_5y[mlphia$ever_cc_tested == 1 & mlphia$last_cc_test <= 5] <- 1
+
+mlphia$Country <- "Malawi"
+mlphia$df = "mlphia"
+mlphia$Year <- mlphia$interview_year
+mlphia$psu <- paste0(mlphia$psu, "-", mlphia$strata)
+
+mlphia <- filter(mlphia, sex == 2 & weight != ". " & weight != 0)
+
+#find year of mid-point date
+mean(mlphia$interview_date)
+a <- filter(mlai, gender == 2 & age > 55 & age < 59)
+table(a$cervcntst)
+```
+```{r Rwanda}
+# rep_weights leaving them out for now <- names(rwai)[grep("intwt",names(rwai))[-1]] 
+rwphia <- select(rwai, 
+                  c(psu = varunit,
+                    weight = intwt0,
+                    # rep_weights leaving them out for now,
+                    strata = varstrat,
+                    interview_month = surveystmonth,
+                    Year = surveystyear,
+                    age,
+                    agegr = agegroup5population,
+                    sex = gender,
+                    region = province,
+                    urban_rural = urban,
+                    wealth_quint = wealthquintile,
+                    wealth_score = wealthscorecont,
+                    edu = educationrwanda,
+                    ever_married = evermar,
+                    marital_status = curmar,
+                    most_recent_condom_use = partlastcndm1,
+                    sex_partners_past_year = part12monum,
+                    #cervical cancer questions
+                    ever_cc_tested = cervcntst,
+                    last_cc_test_m = cervcntm,
+                    last_cc_test_y = cervcnty,
+                    #hiv
+                    hivstat = hivstatusfinal))
+
+#recode
+##determinants
+#adjusting education variable to match dhs variables 
+rwphia$edu[rwphia$edu == 1] <- 0
+rwphia$edu[rwphia$edu == 2] <- 1
+rwphia$edu[rwphia$edu == 3] <- 2
+rwphia$edu[rwphia$edu == 4] <- 3
+rwphia$edu[rwphia$edu == 99] <- NA
+
+#marital_status recode
+rwphia$marital_status[rwphia$marital_status == ". "] <- NA
+rwphia$marital_status <- as.numeric(rwphia$marital_status)
+rwphia$marital_status[rwphia$ever_married == "2 "] <- 0
+rwphia$marital_status[rwphia$marital_status == 5] <- 4
+rwphia$marital_status[rwphia$marital_status == -8] <- NA
+rwphia$marital_status[rwphia$marital_status == -9] <- NA
+
+#condom use at last sex recode
+rwphia$most_recent_condom_use[rwphia$most_recent_condom_use == ". "] <- NA
+rwphia$most_recent_condom_use <- as.numeric(rwphia$most_recent_condom_use)
+rwphia$most_recent_condom_use[rwphia$most_recent_condom_use == 2] <- 0
+rwphia$most_recent_condom_use[rwphia$most_recent_condom_use == -8] <- NA
+rwphia$most_recent_condom_use[rwphia$most_recent_condom_use == -9] <- NA
+
+#number of sex partners in the past year recode
+rwphia$sex_partners_past_year[rwphia$sex_partners_past_year == ". "] <- NA
+rwphia$sex_partners_past_year <- as.numeric(rwphia$sex_partners_past_year)
+rwphia$sex_partners_past_year[rwphia$sex_partners_past_year == -7] <- NA
+
+#recode wealth_quint
+rwphia$wealth_quint[rwphia$wealth_quint == ". "] <- NA
+rwphia$wealth_quint <- as.numeric(rwphia$wealth_quint)
+
+rwphia$hivstat[rwphia$hivstat == 2] <- 0
+rwphia$hivstat[rwphia$hivstat == 99] <- NA
+
+##cervical cancer questions
+#changing coding of some of the variables
+rwphia$ever_cc_tested[rwphia$ever_cc_tested == "1 "] <- 1
+rwphia$ever_cc_tested[rwphia$ever_cc_tested == "2 "] <- 0
+rwphia$ever_cc_tested[rwphia$ever_cc_tested == "-8 "] <- NA
+rwphia$ever_cc_tested[rwphia$ever_cc_tested == "-9 "] <- NA
+rwphia$ever_cc_tested[rwphia$ever_cc_tested == ". "] <- NA
+rwphia$ever_cc_tested <- as.numeric(rwphia$ever_cc_tested)
+
+#last_cc_test recode
+rwphia$last_cc_test_m[rwphia$last_cc_test_m == ". "] <- NA
+rwphia$last_cc_test_y[rwphia$last_cc_test_y == ". "] <- NA
+rwphia$last_cc_test_m <- as.numeric(rwphia$last_cc_test_m)
+rwphia$last_cc_test_y <- as.numeric(rwphia$last_cc_test_y)
+#if missing month but not missing year assume that month is July, if both missing give NA values
+for(i in 1:nrow(rwphia)){
+  if(!is.na(rwphia$last_cc_test_m[i]) & !is.na(rwphia$last_cc_test_y[i]) & rwphia$last_cc_test_m[i] == -8 & rwphia$last_cc_test_m[i] != -8){
+    rwphia$last_cc_test_m[i] <- 7
+  }else if(!is.na(rwphia$last_cc_test_m[i]) & !is.na(rwphia$last_cc_test_y[i]) & rwphia$last_cc_test_m[i] == -8 & rwphia$last_cc_test_m[i] == -8){
+    rwphia$last_cc_test_m[i] <- NA
+    rwphia$last_cc_test_y[i] <- NA
+  }
+}
+
+#create last_cc_test categorical variable to harmonize with other surveys 
+rwphia$last_cc_test <- NA
+for(i in 1:nrow(rwphia)){
+  if(!is.na(rwphia$last_cc_test_m[i]) & !is.na(rwphia$last_cc_test_y[i]) & !is.na(rwphia$interview_month[i]) & !is.na(rwphia$Year[i])){
+    month <- rwphia$interview_month[i] - rwphia$last_cc_test_m[i] 
+    year <- rwphia$Year[i] - rwphia$last_cc_test_y[i] 
+    rwphia$last_cc_test[i] <- year + month/12
+  }
+}
+
+#create cc test past 3 year question among everyone
+rwphia$cc_test_past_3y <- NA
+rwphia$cc_test_past_3y[rwphia$ever_cc_tested == 0] <- 0
+rwphia$cc_test_past_3y[rwphia$ever_cc_tested == 1 & rwphia$last_cc_test > 3] <- 0
+rwphia$cc_test_past_3y[rwphia$ever_cc_tested == 1 & rwphia$last_cc_test <= 3] <- 1
+
+rwphia$cc_test_past_1y[rwphia$ever_cc_tested == 0] <- 0
+rwphia$cc_test_past_1y[rwphia$ever_cc_tested == 1 & rwphia$last_cc_test > 1] <- 0
+rwphia$cc_test_past_1y[rwphia$ever_cc_tested == 1 & rwphia$last_cc_test <= 1] <- 1
+
+rwphia$cc_test_past_5y[rwphia$ever_cc_tested == 0] <- 0
+rwphia$cc_test_past_5y[rwphia$ever_cc_tested == 1 & rwphia$last_cc_test > 5] <- 0
+rwphia$cc_test_past_5y[rwphia$ever_cc_tested == 1 & rwphia$last_cc_test <= 5] <- 1
+
+rwphia$Country <- "Rwanda"
+rwphia$df = "rwphia"
+rwphia$psu <- paste0(rwphia$psu, "-", rwphia$strata)
+
+rwphia <- filter(rwphia, sex == 2 & weight != ". " & weight != 0)
+
+#find year at the midpoint of data
+rwphia$cmc <- 12*(rwphia$Year - 1900) + rwphia$interview_month
+design <- svydesign(data = rwphia, weights = ~weight, id = ~psu) #may need to add strata
+svymean(~cmc, design = design, vartype = "ci", mrwod = "beta") #1428.5 is in 2019
+```
+```{r Tanzania}
+# rep_weights leaving them out for now <- names(tzai)[grep("intwt",names(tzai))[-1]] 
+tzphia <- select(tzai, 
+                  c(psu = varunit,
+                    weight = intwt0,
+                    # rep_weights leaving them out for now,
+                    strata = varstrat,
+                    interview_date = surveystdt,
+                    age,
+                    agegr = agegroup5population,
+                    sex = gender,
+                    region,
+                    urban_rural = urban,
+                    wealth_quint = wealthquintile,
+                    wealth_score = wealthscorecont,
+                    edu = educationtanzania,
+                    ever_married = evermar,
+                    marital_status = curmar,
+                    most_recent_condom_use = partlastcndm1,
+                    sex_partners_past_year = part12monum,
+                    #cervical cancer questions
+                    ever_cc_tested = cervcntst,
+                    last_cc_test_m = cervcntsm,
+                    last_cc_test_y = cervcntsy,
+                    last_cc_test_result = cervcnrslt,
+                    cc_treated = cervcntrt,
+                    #hiv
+                    hivstat = hivstatusfinal))
+
+#recode
+##determinants
+#adjusting education variable to match dhs variables 
+tzphia$edu[tzphia$edu == 1] <- 0
+tzphia$edu[tzphia$edu == 2 | tzphia$edu == 3 | tzphia$edu == 4] <- 1 #post-primary will be considered primary
+tzphia$edu[tzphia$edu == 5 | tzphia$edu == 7] <- 2
+tzphia$edu[tzphia$edu == 6 | tzphia$edu == 8 | tzphia$edu == 9] <- 3
+tzphia$edu[tzphia$edu == 99] <- NA
+
+#marital_status recode
+tzphia$marital_status[tzphia$marital_status == ". "] <- NA
+tzphia$marital_status <- as.numeric(tzphia$marital_status)
+tzphia$marital_status[tzphia$ever_married == "2 "] <- 0
+tzphia$marital_status[tzphia$marital_status == 5] <- 4
+tzphia$marital_status[tzphia$marital_status == -8] <- NA
+tzphia$marital_status[tzphia$marital_status == -9] <- NA
+
+#condom use at last sex recode
+tzphia$most_recent_condom_use[tzphia$most_recent_condom_use == ". "] <- NA
+tzphia$most_recent_condom_use <- as.numeric(tzphia$most_recent_condom_use)
+tzphia$most_recent_condom_use[tzphia$most_recent_condom_use == 2] <- 0
+tzphia$most_recent_condom_use[tzphia$most_recent_condom_use == -8] <- NA
+tzphia$most_recent_condom_use[tzphia$most_recent_condom_use == -9] <- NA
+
+#number of sex partners in the past year recode
+tzphia$sex_partners_past_year[tzphia$sex_partners_past_year == ". "] <- NA
+tzphia$sex_partners_past_year <- as.numeric(tzphia$sex_partners_past_year)
+tzphia$sex_partners_past_year[tzphia$sex_partners_past_year == -7] <- NA
+
+#recode wealth_quint
+tzphia$wealth_quint[tzphia$wealth_quint == ". "] <- NA
+tzphia$wealth_quint <- as.numeric(tzphia$wealth_quint)
+
+tzphia$hivstat[tzphia$hivstat == 2] <- 0
+tzphia$hivstat[tzphia$hivstat == 99] <- NA
+
+##cervical cancer questions
+#changing coding of some of the variables
+tzphia$ever_cc_tested[tzphia$ever_cc_tested == "1 "] <- 1
+tzphia$ever_cc_tested[tzphia$ever_cc_tested == "2 "] <- 0
+tzphia$ever_cc_tested[tzphia$ever_cc_tested == "-8 "] <- NA
+tzphia$ever_cc_tested[tzphia$ever_cc_tested == "-9 "] <- NA
+tzphia$ever_cc_tested[tzphia$ever_cc_tested == ". "] <- NA
+tzphia$ever_cc_tested <- as.numeric(tzphia$ever_cc_tested)
+
+tzphia$last_cc_test_result[tzphia$last_cc_test_result == "-8 "] <- NA
+tzphia$last_cc_test_result[tzphia$last_cc_test_result == ". "] <- NA
+tzphia$last_cc_test_result <- as.numeric(tzphia$last_cc_test_result)
+
+#create var for received cc test results
+tzphia$last_cc_test_result_received[!is.na(tzphia$last_cc_test_result)] <- 0
+tzphia$last_cc_test_result_received[tzphia$last_cc_test_result != 5] <- 1
+
+#create another column for positive cc test result (defined as abnormal/positive)
+tzphia$last_cc_test_pos[!is.na(tzphia$last_cc_test_result)] <- 0
+tzphia$last_cc_test_pos[tzphia$last_cc_test_result == 2] <- 1
+tzphia$last_cc_test_pos[tzphia$last_cc_test_result == 5] <- NA #will make did not receive results NA
+
+tzphia$cc_treated[tzphia$cc_treated == ". "] <- NA
+tzphia$cc_treated <- as.numeric(tzphia$cc_treated)
+
+#creating variable for treated on same day or not (among those treated)
+tzphia$treated_sameday[tzphia$cc_treated == 1] <- 1
+tzphia$treated_sameday[tzphia$cc_treated == 2] <- 0
+
+#recoding the rest of cc treated to make in a binary variable
+tzphia$cc_treated[tzphia$cc_treated == 3] <- 0
+tzphia$cc_treated[tzphia$cc_treated == 2] <- 1
+tzphia$cc_treated[tzphia$cc_treated == -8] <- NA #double check I shouldn't keep as dk
+tzphia$cc_treated[tzphia$cc_treated == -9] <- NA
+
+#last_cc_test recode
+tzphia$last_cc_test_m[tzphia$last_cc_test_m == ". "] <- NA
+tzphia$last_cc_test_y[tzphia$last_cc_test_y == ". "] <- NA
+tzphia$last_cc_test_m <- as.numeric(tzphia$last_cc_test_m)
+tzphia$last_cc_test_y <- as.numeric(tzphia$last_cc_test_y)
+#if missing month but not missing year assume that month is July, if both missing give NA values
+for(i in 1:nrow(tzphia)){
+  if(!is.na(tzphia$last_cc_test_m[i]) & !is.na(tzphia$last_cc_test_y[i]) & tzphia$last_cc_test_m[i] == -8 & tzphia$last_cc_test_m[i] != -8){
+    tzphia$last_cc_test_m[i] <- 7
+  }else if(!is.na(tzphia$last_cc_test_m[i]) & !is.na(tzphia$last_cc_test_y[i]) & tzphia$last_cc_test_m[i] == -8 & tzphia$last_cc_test_m[i] == -8){
+    tzphia$last_cc_test_m[i] <- NA
+    tzphia$last_cc_test_y[i] <- NA
+  }
+}
+
+#split interview_date into month and year
+tzphia$interview_date <- as.Date(tzphia$interview_date)
+tzphia$interview_month <- as.numeric(format(tzphia$interview_date, "%m"))
+tzphia$interview_year <- as.numeric(format(tzphia$interview_date, "%Y"))
+
+#create last_cc_test categorical variable to harmonize with other surveys 
+tzphia$last_cc_test <- NA
+for(i in 1:nrow(tzphia)){
+  if(!is.na(tzphia$last_cc_test_m[i]) & !is.na(tzphia$last_cc_test_y[i]) & !is.na(tzphia$interview_month[i]) & !is.na(tzphia$interview_year[i])){
+    month <- tzphia$interview_month[i] - tzphia$last_cc_test_m[i] 
+    year <- tzphia$interview_year[i] - tzphia$last_cc_test_y[i] 
+    tzphia$last_cc_test[i] <- year + month/12
+  }
+}
+
+#create cc test past 3 year question among everyone
+tzphia$cc_test_past_3y[tzphia$ever_cc_tested == 0] <- 0
+tzphia$cc_test_past_3y[tzphia$ever_cc_tested == 1 & tzphia$last_cc_test > 3] <- 0
+tzphia$cc_test_past_3y[tzphia$ever_cc_tested == 1 & tzphia$last_cc_test <= 3] <- 1
+
+tzphia$cc_test_past_1y[tzphia$ever_cc_tested == 0] <- 0
+tzphia$cc_test_past_1y[tzphia$ever_cc_tested == 1 & tzphia$last_cc_test > 1] <- 0
+tzphia$cc_test_past_1y[tzphia$ever_cc_tested == 1 & tzphia$last_cc_test <= 1] <- 1
+
+tzphia$cc_test_past_5y[tzphia$ever_cc_tested == 0] <- 0
+tzphia$cc_test_past_5y[tzphia$ever_cc_tested == 1 & tzphia$last_cc_test > 5] <- 0
+tzphia$cc_test_past_5y[tzphia$ever_cc_tested == 1 & tzphia$last_cc_test <= 5] <- 1
+
+tzphia$Country <- "Tanzania"
+tzphia$df = "tzphia"
+tzphia$Year <- tzphia$interview_year
+tzphia$psu <- paste0(tzphia$psu, "-", tzphia$strata)
+
+tzphia <- filter(tzphia, sex == 2 & weight != ". " & weight != 0)
+
+#find year of mid-point date
+mean(na.omit(tzphia$interview_date))
+```
+```{r Zambia}
+# rep_weights leaving them out for now <- names(zmai)[grep("intwt",names(zmai))[-1]] 
+zmphia <- select(zmai, 
+                  c(psu = varunit,
+                    weight = intwt0,
+                    # rep_weights leaving them out for now,
+                    strata = varstrat,
+                    interview_date = surveystdt,
+                    age,
+                    agegr = agegroup5population,
+                    sex = gender,
+                    region = province,
+                    urban_rural = urban,
+                    wealth_quint = wealthquintile,
+                    wealth_score = wealthscorecont,
+                    edu = education,
+                    ever_married = evermar,
+                    marital_status = curmar,
+                    most_recent_condom_use = partlastcndm1,
+                    sex_partners_past_year = part12mo,
+                    sex_partners_ever = partlifetm,
+                    #cervical cancer questions
+                    ever_cc_tested = cervcntst,
+                    last_cc_test_m = cervcntsm,
+                    last_cc_test_y = cervcntsy,
+                    last_cc_test_result = cervcnrslt,
+                    last_cc_test_fu = cercnfwup,
+                    cc_treated = cervcntrt,
+                    #hiv
+                    hivstat = hivstatusfinal))
+#recode
+##determinants
+#adjusting education variable to match dhs variables 
+zmphia$edu[zmphia$edu == 1] <- 0
+zmphia$edu[zmphia$edu == 2] <- 1
+zmphia$edu[zmphia$edu == 3] <- 2
+zmphia$edu[zmphia$edu == 4] <- 3
+zmphia$edu[zmphia$edu == 99] <- NA
+
+#marital_status recode
+zmphia$marital_status[zmphia$marital_status == ". "] <- NA
+zmphia$marital_status <- as.numeric(zmphia$marital_status)
+zmphia$marital_status[zmphia$ever_married == "2 "] <- 0
+zmphia$marital_status[zmphia$marital_status == 5] <- 4
+zmphia$marital_status[zmphia$marital_status == -8] <- NA
+zmphia$marital_status[zmphia$marital_status == -9] <- NA
+
+#condom use at last sex recode
+zmphia$most_recent_condom_use[zmphia$most_recent_condom_use == ". "] <- NA
+zmphia$most_recent_condom_use <- as.numeric(zmphia$most_recent_condom_use)
+zmphia$most_recent_condom_use[zmphia$most_recent_condom_use == 2] <- 0
+zmphia$most_recent_condom_use[zmphia$most_recent_condom_use == -8] <- NA
+zmphia$most_recent_condom_use[zmphia$most_recent_condom_use == -9] <- NA
+
+#number of sex partners in the past year recode
+zmphia$sex_partners_past_year[zmphia$sex_partners_past_year == ". "] <- NA
+zmphia$sex_partners_past_year <- as.numeric(zmphia$sex_partners_past_year)
+zmphia$sex_partners_past_year[zmphia$sex_partners_past_year == -7] <- NA
+
+#number of sex partners ever recode
+zmphia$sex_partners_ever[zmphia$sex_partners_ever == ". "] <- NA
+zmphia$sex_partners_ever <- as.numeric(zmphia$sex_partners_ever)
+
+#recode wealth_quint
+zmphia$wealth_quint[zmphia$wealth_quint == ". "] <- NA
+zmphia$wealth_quint <- as.numeric(zmphia$wealth_quint)
+
+zmphia$hivstat[zmphia$hivstat == 2] <- 0
+zmphia$hivstat[zmphia$hivstat == 99] <- NA
+
+##cervical cancer questions
+#changing coding of some of the variables
+zmphia$ever_cc_tested[zmphia$ever_cc_tested == "1 "] <- 1
+zmphia$ever_cc_tested[zmphia$ever_cc_tested == "2 "] <- 0
+zmphia$ever_cc_tested[zmphia$ever_cc_tested == "-8 "] <- NA
+zmphia$ever_cc_tested[zmphia$ever_cc_tested == "-9 "] <- NA
+zmphia$ever_cc_tested[zmphia$ever_cc_tested == ". "] <- NA
+zmphia$ever_cc_tested <- as.numeric(zmphia$ever_cc_tested)
+
+zmphia$last_cc_test_result[zmphia$last_cc_test_result == "-8 "] <- NA
+zmphia$last_cc_test_result[zmphia$last_cc_test_result == ". "] <- NA
+zmphia$last_cc_test_result <- as.numeric(zmphia$last_cc_test_result)
+
+#create var for received cc test results
+zmphia$last_cc_test_result_received[!is.na(zmphia$last_cc_test_result)] <- 0
+zmphia$last_cc_test_result_received[zmphia$last_cc_test_result != 5] <- 1
+
+#create another column for positive cc test result (defined as abnormal/positive)
+zmphia$last_cc_test_pos[!is.na(zmphia$last_cc_test_result)] <- 0
+zmphia$last_cc_test_pos[zmphia$last_cc_test_result == 2 ] <- 1
+zmphia$last_cc_test_pos[zmphia$last_cc_test_result == 5] <- NA #will make did not receive results NA
+
+zmphia$last_cc_test_fu[zmphia$last_cc_test_fu == "1 "] <- 1
+zmphia$last_cc_test_fu[zmphia$last_cc_test_fu == "2 "] <- 0
+zmphia$last_cc_test_fu[zmphia$last_cc_test_fu == "-8 "] <- NA
+zmphia$last_cc_test_fu[zmphia$last_cc_test_fu == "-9 "] <- NA
+zmphia$last_cc_test_fu[zmphia$last_cc_test_fu == ". "] <- NA
+zmphia$last_cc_test_fu <- as.numeric(zmphia$last_cc_test_fu)
+
+zmphia$cc_treated[zmphia$cc_treated == ". "] <- NA
+zmphia$cc_treated[zmphia$last_cc_test_result == 3] <- NA #remove suspect cancer to align with other surveys
+zmphia$cc_treated <- as.numeric(zmphia$cc_treated)
+
+#creating variable for treated on same day or not (among those treated)
+zmphia$treated_sameday[zmphia$cc_treated == 1] <- 1
+zmphia$treated_sameday[zmphia$cc_treated == 2] <- 0
+
+#recoding the rest of cc treated to make in a binary variable
+zmphia$cc_treated[zmphia$cc_treated == 3] <- 0
+zmphia$cc_treated[zmphia$cc_treated == 2] <- 1
+zmphia$cc_treated[zmphia$cc_treated == -8] <- NA #double check I shouldn't keep as dk
+zmphia$cc_treated[zmphia$cc_treated == -9] <- NA
+
+#last_cc_test recode
+zmphia$last_cc_test_m[zmphia$last_cc_test_m == ". "] <- NA
+zmphia$last_cc_test_y[zmphia$last_cc_test_y == ". "] <- NA
+zmphia$last_cc_test_m <- as.numeric(zmphia$last_cc_test_m)
+zmphia$last_cc_test_y <- as.numeric(zmphia$last_cc_test_y)
+#if missing month but not missing year assume that month is July, if both missing give NA values
+for(i in 1:nrow(zmphia)){
+  if(!is.na(zmphia$last_cc_test_m[i]) & !is.na(zmphia$last_cc_test_y[i]) & zmphia$last_cc_test_m[i] == -8 & zmphia$last_cc_test_m[i] != -8){
+    zmphia$last_cc_test_m[i] <- 7
+  }else if(!is.na(zmphia$last_cc_test_m[i]) & !is.na(zmphia$last_cc_test_y[i]) & zmphia$last_cc_test_m[i] == -8 & zmphia$last_cc_test_m[i] == -8){
+    zmphia$last_cc_test_m[i] <- NA
+    zmphia$last_cc_test_y[i] <- NA
+  }
+}
+
+#split interview_date into month and year
+zmphia$interview_date <- as.Date(zmphia$interview_date)
+zmphia$interview_month <- as.numeric(format(zmphia$interview_date, "%m"))
+zmphia$interview_year <- as.numeric(format(zmphia$interview_date, "%Y"))
+
+#create last_cc_test categorical variable to harmonize with other surveys 
+zmphia$last_cc_test <- NA
+for(i in 1:nrow(zmphia)){
+  if(!is.na(zmphia$last_cc_test_m[i]) & !is.na(zmphia$last_cc_test_y[i]) & !is.na(zmphia$interview_month[i]) & !is.na(zmphia$interview_year[i])){
+    month <- zmphia$interview_month[i] - zmphia$last_cc_test_m[i] 
+    year <- zmphia$interview_year[i] - zmphia$last_cc_test_y[i] 
+    zmphia$last_cc_test[i] <- year + month/12
+  }
+}
+
+#create cc test past 3 year question among everyone
+zmphia$cc_test_past_3y[zmphia$ever_cc_tested == 0] <- 0
+zmphia$cc_test_past_3y[zmphia$ever_cc_tested == 1 & zmphia$last_cc_test > 3] <- 0
+zmphia$cc_test_past_3y[zmphia$ever_cc_tested == 1 & zmphia$last_cc_test <= 3] <- 1
+
+zmphia$cc_test_past_1y[zmphia$ever_cc_tested == 0] <- 0
+zmphia$cc_test_past_1y[zmphia$ever_cc_tested == 1 & zmphia$last_cc_test > 1] <- 0
+zmphia$cc_test_past_1y[zmphia$ever_cc_tested == 1 & zmphia$last_cc_test <= 1] <- 1
+
+zmphia$cc_test_past_5y[zmphia$ever_cc_tested == 0] <- 0
+zmphia$cc_test_past_5y[zmphia$ever_cc_tested == 1 & zmphia$last_cc_test > 5] <- 0
+zmphia$cc_test_past_5y[zmphia$ever_cc_tested == 1 & zmphia$last_cc_test <= 5] <- 1
+
+zmphia$Country <- "Zambia"
+zmphia$df = "zmphia"
+zmphia$Year <- zmphia$interview_year
+zmphia$psu <- paste0(zmphia$psu, "-", zmphia$strata)
+
+zmphia <- filter(zmphia, sex == 2 & weight != ". " & weight != 0)
+```
+```{r Zimbabwe}
+# rep_weights leaving them out for now <- names(zwai)[grep("intwt",names(zwai))[-1]] 
+zwphia <- select(zwai, 
+                  c(psu = varunit,
+                    weight = intwt0,
+                    # rep_weights leaving them out for now,
+                    strata = varstrat,
+                    interview_month = surveystmonth,
+                    Year = surveystyear,
+                    age,
+                    agegr = agegroup5population,
+                    sex = gender,
+                    region = province,
+                    urban_rural = urban,
+                    wealth_quint = wealthquintile,
+                    wealth_score = wealthscorecont,
+                    edu = education,
+                    ever_married = evermar,
+                    marital_status = curmar,
+                    most_recent_condom_use = partlastcndm1,
+                    sex_partners_past_year = part12monum,
+                    #cervical cancer questions
+                    ever_cc_tested = cervcntst,
+                    last_cc_test_m = cervcntsm,
+                    last_cc_test_y = cervcntsy,
+                    last_cc_test_result = cervcnrslt,
+                    last_cc_test_fu = cercnfwup,
+                    #hiv
+                    hivstat = hivstatusfinal))
+#recode
+##determinants
+#adjusting education variable to match dhs variables 
+zwphia$edu[zwphia$edu == 1] <- 0
+zwphia$edu[zwphia$edu == 2] <- 1
+zwphia$edu[zwphia$edu == 3] <- 2
+zwphia$edu[zwphia$edu == 4] <- 3
+zwphia$edu[zwphia$edu == 99] <- NA
+
+#marital_status recode
+zwphia$marital_status[zwphia$marital_status == ". "] <- NA
+zwphia$marital_status <- as.numeric(zwphia$marital_status)
+zwphia$marital_status[zwphia$ever_married == "2 "] <- 0
+zwphia$marital_status[zwphia$marital_status == 5] <- 4
+zwphia$marital_status[zwphia$marital_status == -8] <- NA
+zwphia$marital_status[zwphia$marital_status == -9] <- NA
+
+#condom use at last sex recode
+zwphia$most_recent_condom_use[zwphia$most_recent_condom_use == ". "] <- NA
+zwphia$most_recent_condom_use <- as.numeric(zwphia$most_recent_condom_use)
+zwphia$most_recent_condom_use[zwphia$most_recent_condom_use == 2] <- 0
+zwphia$most_recent_condom_use[zwphia$most_recent_condom_use == -8] <- NA
+zwphia$most_recent_condom_use[zwphia$most_recent_condom_use == -9] <- NA
+
+#number of sex partners in the past year recode
+zwphia$sex_partners_past_year[zwphia$sex_partners_past_year == ". "] <- NA
+zwphia$sex_partners_past_year <- as.numeric(zwphia$sex_partners_past_year)
+zwphia$sex_partners_past_year[zwphia$sex_partners_past_year == -7] <- NA
+
+#recode wealth_quint
+zwphia$wealth_quint[zwphia$wealth_quint == ". "] <- NA
+zwphia$wealth_quint <- as.numeric(zwphia$wealth_quint)
+
+zwphia$hivstat[zwphia$hivstat == 2] <- 0
+zwphia$hivstat[zwphia$hivstat == 99] <- NA
+
+##cervical cancer questions
+#changing coding of some of the variables
+zwphia$ever_cc_tested[zwphia$ever_cc_tested == "1 "] <- 1
+zwphia$ever_cc_tested[zwphia$ever_cc_tested == "2 "] <- 0
+zwphia$ever_cc_tested[zwphia$ever_cc_tested == "-8 "] <- NA
+zwphia$ever_cc_tested[zwphia$ever_cc_tested == "-9 "] <- NA
+zwphia$ever_cc_tested[zwphia$ever_cc_tested == ". "] <- NA
+zwphia$ever_cc_tested <- as.numeric(zwphia$ever_cc_tested)
+
+zwphia$last_cc_test_result[zwphia$last_cc_test_result == "-8 "] <- NA
+zwphia$last_cc_test_result[zwphia$last_cc_test_result == ". "] <- NA
+zwphia$last_cc_test_result <- as.numeric(zwphia$last_cc_test_result)
+
+#create var for received cc test results
+zwphia$last_cc_test_result_received[!is.na(zwphia$last_cc_test_result)] <- 0
+zwphia$last_cc_test_result_received[zwphia$last_cc_test_result != 5] <- 1
+
+#create another column for positive cc test result (defined as abnormal/positive or suspect cancer)
+zwphia$last_cc_test_pos[!is.na(zwphia$last_cc_test_result)] <- 0
+zwphia$last_cc_test_pos[zwphia$last_cc_test_result == 2 | zwphia$last_cc_test_result == 3] <- 1
+zwphia$last_cc_test_pos[zwphia$last_cc_test_result == 5] <- NA #will make did not receive results NA
+
+zwphia$last_cc_test_fu[zwphia$last_cc_test_fu == "1 "] <- 1
+zwphia$last_cc_test_fu[zwphia$last_cc_test_fu == "2 "] <- 0
+zwphia$last_cc_test_fu[zwphia$last_cc_test_fu == "-8 "] <- NA
+zwphia$last_cc_test_fu[zwphia$last_cc_test_fu == "-9 "] <- NA
+zwphia$last_cc_test_fu[zwphia$last_cc_test_fu == ". "] <- NA
+zwphia$last_cc_test_fu <- as.numeric(zwphia$last_cc_test_fu)
+
+#last_cc_test recode
+zwphia$last_cc_test_m[zwphia$last_cc_test_m == ". "] <- NA
+zwphia$last_cc_test_y[zwphia$last_cc_test_y == ". "] <- NA
+zwphia$last_cc_test_m <- as.numeric(zwphia$last_cc_test_m)
+zwphia$last_cc_test_y <- as.numeric(zwphia$last_cc_test_y)
+#if missing month but not missing year assume that month is July, if both missing give NA values
+for(i in 1:nrow(zwphia)){
+  if(!is.na(zwphia$last_cc_test_m[i]) & !is.na(zwphia$last_cc_test_y[i]) & zwphia$last_cc_test_m[i] == -8 & zwphia$last_cc_test_m[i] != -8){
+    zwphia$last_cc_test_m[i] <- 7
+  }else if(!is.na(zwphia$last_cc_test_m[i]) & !is.na(zwphia$last_cc_test_y[i]) & zwphia$last_cc_test_m[i] == -8 & zwphia$last_cc_test_m[i] == -8){
+    zwphia$last_cc_test_m[i] <- NA
+    zwphia$last_cc_test_y[i] <- NA
+  }
+}
+
+#create last_cc_test categorical variable to harmonize with other surveys 
+zwphia$last_cc_test <- NA
+for(i in 1:nrow(zwphia)){
+  if(!is.na(zwphia$last_cc_test_m[i]) & !is.na(zwphia$last_cc_test_y[i]) & !is.na(zwphia$interview_month[i]) & !is.na(zwphia$Year[i])){
+    month <- zwphia$interview_month[i] - zwphia$last_cc_test_m[i] 
+    year <- zwphia$Year[i] - zwphia$last_cc_test_y[i] 
+    zwphia$last_cc_test[i] <- year + month/12
+  }
+}
+
+#create cc test past 3 year question among everyone
+zwphia$cc_test_past_3y[zwphia$ever_cc_tested == 0] <- 0
+zwphia$cc_test_past_3y[zwphia$ever_cc_tested == 1 & zwphia$last_cc_test > 3] <- 0
+zwphia$cc_test_past_3y[zwphia$ever_cc_tested == 1 & zwphia$last_cc_test <= 3] <- 1
+
+zwphia$cc_test_past_1y[zwphia$ever_cc_tested == 0] <- 0
+zwphia$cc_test_past_1y[zwphia$ever_cc_tested == 1 & zwphia$last_cc_test > 3] <- 0
+zwphia$cc_test_past_1y[zwphia$ever_cc_tested == 1 & zwphia$last_cc_test <= 3] <- 1
+
+zwphia$cc_test_past_5y[zwphia$ever_cc_tested == 0] <- 0
+zwphia$cc_test_past_5y[zwphia$ever_cc_tested == 1 & zwphia$last_cc_test > 5] <- 0
+zwphia$cc_test_past_5y[zwphia$ever_cc_tested == 1 & zwphia$last_cc_test <= 5] <- 1
+
+zwphia$Country <- "Zimbabwe"
+zwphia$df = "zwphia"
+zwphia$psu <- paste0(zwphia$psu, "-", zwphia$strata)
+
+zwphia <- filter(zwphia, sex == 2 & weight != ". " & weight != 0)
+
+zwphia$cmc <- 12*(zwphia$Year - 1900) + zwphia$interview_month
+design <- svydesign(data = zwphia, weights = ~weight, id = ~psu) #may need to add strata
+svymean(~cmc, design = design, vartype = "ci", method = "beta") #1395.9 is in 2016
+```
+
+```{r missing data}
+phia_list <- list(ethai, mlai, rwai, tzai, zmai, zwai)
+names(phia_list) <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
+a <- filter(zwai, gender == 2)
+table(a$cervcntst)
+sum(table(a$cervcntst))
+b <- filter(zwai, gender == 2 & cervcntst == ". ",)
+sum(table(b$age))
+
+for(i in 1:length(phia_list)){
+  phia_list[[i]]$agegr <- phia_list[[i]]$agegroup5population
+  phia_list[[i]]$agegr[phia_list[[i]]$agegroup5population >= 14] <- 14
+}
+
+dat_missing <- data.frame(Survey = NA,
+                 agegr = NA,
+                 elg_resp = NA,
+                 resp = NA,
+                 dk = NA,
+                 missing = NA)
+n=1
+for(i in 1:length(phia_list)){
+  for(a in 1:length(sort(unique(phia_list[[i]]$agegr)))){
+    gr <- sort(unique(phia_list[[i]]$agegr))[a]
+    df <- filter(phia_list[[i]], gender == 2 & agegr == gr)
+    id <- names(phia_list)[i]
+    tbl <- table(df$cervcntst)
+    df_tbl <- data.frame(tbl)
+    elg_resp <- sum(tbl)
+    dk1 <- df_tbl[df_tbl$Var1 == "-8 " , 2]
+    if(length(dk1) == 0){
+        dk1 = 0
+      }
+    dk2 <- df_tbl[df_tbl$Var1 == "-9 " , 2]
+      if(length(dk2) == 0){
+        dk2 = 0
+      }
+    dk = dk1 + dk2
+    missing <- df_tbl[df_tbl$Var1 == ". " , 2]
+    dat_missing[n, ] <- c(id, gr, elg_resp, NA, dk, missing)
+    print(id); print(gr); print(tbl)
+    n=n+1
+  }
+}
+dat_missing$agegr <- factor(dat_missing$agegr, levels = c(4, 5, 6, 7, 8, 9 , 10, 11, 12, 13, 14),
+                            labels = c("15-19", "20-24", "25-29", "30-34", "35-39", 
+                                       "40-44", "45-49", "50-54", "55-59", "60-64",
+                                       "65-1000"))
+dat_missing[dat_missing$agegr == "65-1000",]
+```
+
+```{r}
+save(ethphia, mlphia, rwphia, tzphia, zmphia, zwphia, file = "Cleaned PHIA")
+```
+
+<!-- # Ever tested for CC -->
+<!-- ```{r ever tested function} -->
+<!-- evercctested <- function(df, age1, age2){ -->
+<!--   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested)) -->
+
+<!--   if(nrow(sub_df) <= 1){ -->
+<!--     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA)) -->
+
+<!--   }else{ -->
+<!--     design <- svydesign(data = sub_df, weights = ~weight, strata = ~strata, id = ~psu, nest = T) -->
+<!--     m <- svyciprop(~ever_cc_tested, design = design) #PHIA example has df of 25 -- why? -->
+<!--     ci <- confint(m) -->
+
+<!--     return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) -->
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
+<!-- ```{r ever cc tested ethiopia} -->
+<!-- age.groups <- data.frame(c(seq(15, 60, 5), 15, 15, 15), c(seq(19, 64, 5), 49, 59, 64)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-19", "20-24", "25-29", "30-34",  -->
+<!--                                 "35-39", "40-44", "45-49", "50-54", -->
+<!--                                 "55-59", "60-64", "15-49", "15-59", "15-64")) -->
+
+<!-- evercctested_ethphia <- df_age_fig(age.groups, ethphia, evercctested, df) -->
+<!-- evercctested_ethphia2 <- df_age_xl(age.groups, ethphia, evercctested, df) -->
+
+<!-- #by hivstatus -->
+<!-- ethphia_hivp <- filter(ethphia, hivstat == 1) -->
+<!-- ethphia_hivn <- filter(ethphia, hivstat == 0) -->
+
+<!-- evercctested_ethphia_hivp <- df_age_fig(age.groups, ethphia_hivp, evercctested, df) -->
+<!-- evercctested_ethphia_hivp2 <- df_age_xl(age.groups, ethphia_hivp, evercctested, df) -->
+
+<!-- evercctested_ethphia_hivn <- df_age_fig(age.groups, ethphia_hivn, evercctested, df) -->
+<!-- evercctested_ethphia_hivn2 <- df_age_xl(age.groups, ethphia_hivn, evercctested, df) -->
+<!-- ``` -->
+<!-- ```{r ever cc tested malawi} -->
+<!-- age.groups <- data.frame(c(seq(15, 60, 5), 15, 15, 15), c(seq(19, 64, 5), 49, 59, 64)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-19", "20-24", "25-29", "30-34",  -->
+<!--                                 "35-39", "40-44", "45-49", "50-54", -->
+<!--                                 "55-59", "60-64", "15-49", "15-59", "15-64")) -->
+
+<!-- evercctested_mlphia <- df_age_fig(age.groups, mlphia, evercctested, df) -->
+<!-- evercctested_mlphia2 <- df_age_xl(age.groups, mlphia, evercctested, df) -->
+
+<!-- #by hivstatus -->
+<!-- mlphia_hivp <- filter(mlphia, hivstat == 1) -->
+<!-- mlphia_hivn <- filter(mlphia, hivstat == 0) -->
+
+<!-- evercctested_mlphia_hivp <- df_age_fig(age.groups, mlphia_hivp, evercctested, df) -->
+<!-- evercctested_mlphia_hivp2 <- df_age_xl(age.groups, mlphia_hivp, evercctested, df) -->
+
+<!-- evercctested_mlphia_hivn <- df_age_fig(age.groups, mlphia_hivn, evercctested, df) -->
+<!-- evercctested_mlphia_hivn2 <- df_age_xl(age.groups, mlphia_hivn, evercctested, df) -->
+<!-- ``` -->
+<!-- ```{r ever cc tested rwanda} -->
+<!-- age.groups <- data.frame(c(seq(15, 60, 5), 15, 15, 15), c(seq(19, 64, 5), 49, 59, 64)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-19", "20-24", "25-29", "30-34",  -->
+<!--                                 "35-39", "40-44", "45-49", "50-54", -->
+<!--                                 "55-59", "60-64", "15-49", "15-59", "15-64")) -->
+
+<!-- evercctested_rwphia <- df_age_fig(age.groups, rwphia, evercctested, df) -->
+<!-- evercctested_rwphia2 <- df_age_fig(age.groups, rwphia, evercctested, df) -->
+
+<!-- #by hivstatus -->
+<!-- rwphia_hivp <- filter(rwphia, hivstat == 1) -->
+<!-- rwphia_hivn <- filter(rwphia, hivstat == 0) -->
+
+<!-- evercctested_rwphia_hivp <- df_age_fig(age.groups, rwphia_hivp, evercctested, df) -->
+<!-- evercctested_rwphia_hivp2 <- df_age_xl(age.groups, rwphia_hivp, evercctested, df) -->
+
+<!-- evercctested_rwphia_hivn <- df_age_fig(age.groups, rwphia_hivn, evercctested, df) -->
+<!-- evercctested_rwphia_hivn2 <- df_age_xl(age.groups, rwphia_hivn, evercctested, df) -->
+<!-- ``` -->
+<!-- ```{r ever cc tested tanzania} -->
+<!-- age.groups <- data.frame(c(seq(15, 60, 5), 65, 15, 15, 15, 15), c(seq(19, 64, 5), 80, 49, 59, 64, 80)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-19", "20-24", "25-29", "30-34",  -->
+<!--                                 "35-39", "40-44", "45-49", "50-54", -->
+<!--                                 "55-59", "60-64", "65-80", "15-49",  -->
+<!--                                 "15-59", "15-64", "15-80")) -->
+
+<!-- evercctested_tzphia <- df_age_fig(age.groups, tzphia, evercctested, df) -->
+<!-- evercctested_tzphia2 <- df_age_fig(age.groups, tzphia, evercctested, df) -->
+
+<!-- #by hivstatus -->
+<!-- tzphia_hivp <- filter(tzphia, hivstat == 1) -->
+<!-- tzphia_hivn <- filter(tzphia, hivstat == 0) -->
+
+<!-- evercctested_tzphia_hivp <- df_age_fig(age.groups, tzphia_hivp, evercctested, df) -->
+<!-- evercctested_tzphia_hivp2 <- df_age_xl(age.groups, tzphia_hivp, evercctested, df) -->
+
+<!-- evercctested_tzphia_hivn <- df_age_fig(age.groups, tzphia_hivn, evercctested, df) -->
+<!-- evercctested_tzphia_hivn2 <- df_age_xl(age.groups, tzphia_hivn, evercctested, df) -->
+<!-- ``` -->
+<!-- ```{r ever cc tested zambia} -->
+<!-- age.groups <- data.frame(c(seq(15, 55, 5), 15, 15), c(seq(19, 59, 5), 49, 59)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-19", "20-24", "25-29", "30-34",  -->
+<!--                                 "35-39", "40-44", "45-49", "50-54", -->
+<!--                                 "55-59", "15-49", "15-59")) -->
+
+<!-- evercctested_zmphia <- df_age_fig(age.groups, zmphia, evercctested, df) -->
+<!-- evercctested_zmphia2 <- df_age_fig(age.groups, zmphia, evercctested, df) -->
+
+<!-- #by hivstatus -->
+<!-- zmphia_hivp <- filter(zmphia, hivstat == 1) -->
+<!-- zmphia_hivn <- filter(zmphia, hivstat == 0) -->
+
+<!-- evercctested_zmphia_hivp <- df_age_fig(age.groups, zmphia_hivp, evercctested, df) -->
+<!-- evercctested_zmphia_hivp2 <- df_age_xl(age.groups, zmphia_hivp, evercctested, df) -->
+
+<!-- evercctested_zmphia_hivn <- df_age_fig(age.groups, zmphia_hivn, evercctested, df) -->
+<!-- evercctested_zmphia_hivn2 <- df_age_xl(age.groups, zmphia_hivn, evercctested, df) -->
+<!-- table(zmphia$age) -->
+<!-- ``` -->
+<!-- ```{r ever cc tested zimbabwe} -->
+<!-- age.groups <- data.frame(c(seq(15, 60, 5), 65, 15, 15, 15, 15), c(seq(19, 64, 5), 80, 49, 59, 64, 80)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-19", "20-24", "25-29", "30-34",  -->
+<!--                                 "35-39", "40-44", "45-49", "50-54", -->
+<!--                                 "55-59", "60-64", "65-80", "15-49",  -->
+<!--                                 "15-59", "15-64", "15-80")) -->
+
+<!-- evercctested_zwphia <- df_age_fig(age.groups, zwphia, evercctested, df) -->
+<!-- evercctested_zwphia2 <- df_age_fig(age.groups, zwphia, evercctested, df) -->
+
+<!-- #by hivstatus -->
+<!-- zwphia_hivp <- filter(zwphia, hivstat == 1) -->
+<!-- zwphia_hivn <- filter(zwphia, hivstat == 0) -->
+
+<!-- evercctested_zwphia_hivp <- df_age_fig(age.groups, zwphia_hivp, evercctested, df) -->
+<!-- evercctested_zwphia_hivp2 <- df_age_xl(age.groups, zwphia_hivp, evercctested, df) -->
+
+<!-- evercctested_zwphia_hivn <- df_age_fig(age.groups, zwphia_hivn, evercctested, df) -->
+<!-- evercctested_zwphia_hivn2 <- df_age_xl(age.groups, zwphia_hivn, evercctested, df) -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- evercctested_ethphia$Country <- "Ethiopia" -->
+<!-- evercctested_mlphia$Country <- "Malawi" -->
+<!-- evercctested_rwphia$Country <- "Rwanda" -->
+<!-- evercctested_tzphia$Country <- "Tanzania" -->
+<!-- evercctested_zmphia$Country <- "Zambia" -->
+<!-- evercctested_zwphia$Country <- "Zimbabwe" -->
+
+<!-- evercctested_ethphia_hivp$Country <- "Ethiopia" -->
+<!-- evercctested_mlphia_hivp$Country <- "Malawi" -->
+<!-- evercctested_rwphia_hivp$Country <- "Rwanda" -->
+<!-- evercctested_tzphia_hivp$Country <- "Tanzania" -->
+<!-- evercctested_zmphia_hivp$Country <- "Zambia" -->
+<!-- evercctested_zwphia_hivp$Country <- "Zimbabwe" -->
+
+<!-- evercctested_ethphia_hivn$Country <- "Ethiopia" -->
+<!-- evercctested_mlphia_hivn$Country <- "Malawi" -->
+<!-- evercctested_rwphia_hivn$Country <- "Rwanda" -->
+<!-- evercctested_tzphia_hivn$Country <- "Tanzania" -->
+<!-- evercctested_zmphia_hivn$Country <- "Zambia" -->
+<!-- evercctested_zwphia_hivn$Country <- "Zimbabwe" -->
+
+<!-- evercctested_ethphia$Year <- "2017.5" -->
+<!-- evercctested_mlphia$Year <- "2015.5" -->
+<!-- evercctested_rwphia$Year <- "2018.5" -->
+<!-- evercctested_tzphia$Year <- "2016.5" -->
+<!-- evercctested_zmphia$Year <- "2016" -->
+<!-- evercctested_zwphia$Year <- "2015.5" -->
+
+<!-- evercctested_ethphia_hivp$Year <- "2017.5" -->
+<!-- evercctested_mlphia_hivp$Year <- "2015.5" -->
+<!-- evercctested_rwphia_hivp$Year <- "2018.5" -->
+<!-- evercctested_tzphia_hivp$Year <- "2016.5" -->
+<!-- evercctested_zmphia_hivp$Year <- "2016" -->
+<!-- evercctested_zwphia_hivp$Year <- "2015.5" -->
+
+<!-- evercctested_ethphia_hivn$Year <- "2017.5" -->
+<!-- evercctested_mlphia_hivn$Year <- "2015.5" -->
+<!-- evercctested_rwphia_hivn$Year <- "2018.5" -->
+<!-- evercctested_tzphia_hivn$Year <- "2016.5" -->
+<!-- evercctested_zmphia_hivn$Year <- "2016" -->
+<!-- evercctested_zwphia_hivn$Year <- "2015.5" -->
+
+<!-- evercctested_ethphia$Status <- "Either HIV+ or HIV-" -->
+<!-- evercctested_mlphia$Status <- "Either HIV+ or HIV-" -->
+<!-- evercctested_rwphia$Status <- "Either HIV+ or HIV-" -->
+<!-- evercctested_tzphia$Status <- "Either HIV+ or HIV-" -->
+<!-- evercctested_zmphia$Status <- "Either HIV+ or HIV-" -->
+<!-- evercctested_zwphia$Status <- "Either HIV+ or HIV-" -->
+
+<!-- evercctested_ethphia_hivp$Status <- "HIV+" -->
+<!-- evercctested_mlphia_hivp$Status <- "HIV+" -->
+<!-- evercctested_rwphia_hivp$Status <- "HIV+" -->
+<!-- evercctested_tzphia_hivp$Status <- "HIV+" -->
+<!-- evercctested_zmphia_hivp$Status <- "HIV+" -->
+<!-- evercctested_zwphia_hivp$Status <- "HIV+" -->
+
+<!-- evercctested_ethphia_hivn$Status <- "HIV-" -->
+<!-- evercctested_mlphia_hivn$Status <- "HIV-" -->
+<!-- evercctested_rwphia_hivn$Status <- "HIV-" -->
+<!-- evercctested_tzphia_hivn$Status <- "HIV-" -->
+<!-- evercctested_zmphia_hivn$Status <- "HIV-" -->
+<!-- evercctested_zwphia_hivn$Status <- "HIV-" -->
+
+<!-- evercctested_phia <- rbind(evercctested_ethphia, -->
+<!--                            evercctested_mlphia, -->
+<!--                            evercctested_rwphia, -->
+<!--                            evercctested_tzphia, -->
+<!--                            evercctested_zmphia, -->
+<!--                            evercctested_zwphia) -->
+
+<!-- evercctested_phia_hiv <- rbind(evercctested_ethphia, -->
+<!--                            evercctested_mlphia, -->
+<!--                            evercctested_rwphia, -->
+<!--                            evercctested_tzphia, -->
+<!--                            evercctested_zmphia, -->
+<!--                            evercctested_zwphia, -->
+<!--                            evercctested_ethphia_hivp, -->
+<!--                            evercctested_mlphia_hivp, -->
+<!--                            evercctested_rwphia_hivp, -->
+<!--                            evercctested_tzphia_hivp, -->
+<!--                            evercctested_zmphia_hivp, -->
+<!--                            evercctested_zwphia_hivp, -->
+<!--                            evercctested_ethphia_hivn, -->
+<!--                            evercctested_mlphia_hivn, -->
+<!--                            evercctested_rwphia_hivn, -->
+<!--                            evercctested_tzphia_hivn, -->
+<!--                            evercctested_zmphia_hivn, -->
+<!--                            evercctested_zwphia_hivn) -->
+
+<!-- evercctested_phia$Age.Groups <- factor(evercctested_phia$Age.Groups, levels = c("15-19", "20-24", "25-29", "30-34",  -->
+<!--                                                                                 "35-39", "40-44", "45-49", "50-54", -->
+<!--                                                                                 "55-59", "60-64", "65-80", "15-49",  -->
+<!--                                                                                 "15-59", "15-64", "15-80")) -->
+<!-- evercctested_phia_hiv$Age.Groups <- factor(evercctested_phia_hiv$Age.Groups, levels = c("15-19", "20-24", "25-29", "30-34",  -->
+<!--                                                                                 "35-39", "40-44", "45-49", "50-54", -->
+<!--                                                                                 "55-59", "60-64", "65-80", "15-49",  -->
+<!--                                                                                 "15-59", "15-64", "15-80")) -->
+
+<!-- ``` -->
+<!-- ```{r ever cc tested plots} -->
+<!-- ggplot(evercctested_phia, aes(x = Age.Groups, y = Mean, fill = Country)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("PHIA: Proportion ever tested for cervical cancer") +  -->
+<!--   facet_wrap(~Country, nrow = 3) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) + -->
+<!--   ylim(0,1) -->
+
+<!-- ggplot(evercctested_phia_hiv, aes(x = Age.Groups, y = Mean, fill = Status)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("PHIA: Proportion ever tested for cervical cancer by HIV status") +  -->
+<!--   facet_wrap(~Country, nrow = 3) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) + -->
+<!--   ylim(0,1) -->
+<!-- ``` -->
+
+<!-- # Follow up if last CC test is abnormal -->
+<!-- ```{r follow up after last cc test among those with abnormal test results function} -->
+<!-- lastcctestfu <- function(df, age1, age2){ -->
+<!--   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(last_cc_test_fu)) -->
+
+<!--   design <- svydesign(data = sub_df, weights = ~weight, strata = ~strata, id = ~psu, nest = T) -->
+<!--   m <- svyciprop(~last_cc_test_fu, design = design) #PHIA example has df of 25 -- why? -->
+<!--   ci <- confint(m) -->
+
+<!--   return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) -->
+<!-- } -->
+<!-- ``` -->
+<!-- ```{r follow up ethiopia} -->
+<!-- age.groups <- data.frame(c(15, 15, 15), c(49, 59, 64)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-49", "15-59", "15-64")) -->
+
+<!-- lastcctestfu_ethphia <- df_age_fig(age.groups, ethphia, lastcctestfu, df) -->
+<!-- ``` -->
+<!-- ```{r follow up malawi} -->
+<!-- age.groups <- data.frame(c(15, 15, 15), c(49, 59, 64)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-49", "15-59", "15-64")) -->
+
+<!-- lastcctestfu_mlphia <- df_age_fig(age.groups, mlphia, lastcctestfu, df) -->
+<!-- ``` -->
+<!-- ```{r follow up zambia} -->
+<!-- age.groups <- data.frame(c(15, 15), c(49, 59)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-49", "15-59")) -->
+
+<!-- lastcctestfu_zmphia <- df_age_fig(age.groups, zmphia, lastcctestfu, df) -->
+<!-- ``` -->
+<!-- ```{r follow up zimbabwe} -->
+<!-- age.groups <- data.frame(c(15, 15, 14, 14), c(49, 59, 64, 80)) -->
+
+<!-- df <- data.frame(Age.Groups = c("15-49", "15-59", "15-64", "15-80")) -->
+
+<!-- lastcctestfu_zwphia <- df_age_fig(age.groups, zwphia, lastcctestfu, df) -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- lastcctestfu_ethphia$Country <- "Ethiopia" -->
+<!-- lastcctestfu_mlphia$Country <- "Malawi" -->
+<!-- lastcctestfu_zmphia$Country <- "Zambia" -->
+<!-- lastcctestfu_zwphia$Country <- "Zimbabwe" -->
+
+<!-- lastcctestfu_phia <- rbind(lastcctestfu_ethphia, -->
+<!--                            lastcctestfu_mlphia, -->
+<!--                            lastcctestfu_zmphia, -->
+<!--                            lastcctestfu_zwphia) -->
+<!-- ``` -->
+<!-- ```{r follow up plots} -->
+<!-- ggplot(lastcctestfu_phia, aes(x = Country, y = Mean, fill = Age.Groups)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("PHIA: Proportion follow up apt among those with abnormal CC test result") + -->
+<!--   ylim(0, 1) -->
+<!-- ``` -->
+
+
