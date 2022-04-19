@@ -1,0 +1,145 @@
+---
+title: "KAIS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import}
+library(dplyr)
+library(survey)
+library(tidyr)
+library(ggplot2)
+library(knitr)
+library(haven)
+library(reldist)
+source("df_functions.R")
+
+kais_adult <- read_dta("~/Documents/GitHub/HPV-HIV-Model/KAIS/alladults.dta")
+```
+
+```{r 2012 clean}
+kais <- select(kais_adult,
+                c(psu = qclust,
+                  strata,
+                  weight = aiweight,
+                  Year = interviewdate,
+                  age = q_102,
+                  sex, #male = 1; female = 2
+                  region = qprov,
+                  urban_rural = qresid, #rural = 1; urban = 2
+                  wealth_quint = windex5,
+                  edu_ever = q_103,
+                  edu_level = q_104,
+                  marital_status = marital,
+                  most_recent_condom_use = q_424lst, # sex partner matrix responses for the last sex partner for respondents who reported at least one sex partner is in the last 12 months
+                  sex_partners_past_year = q_413v, 
+                  sex_partners_ever = q_412v,
+                  #cervical cancer questions
+                  ever_cc_tested = q_814,
+                  last_cc_test_result = q_815,
+                  cc_treatment_referred = q_816,
+                  #hiv questions
+                  hiv_weight = abweight,
+                  hivstat = hiv,
+                  arv = onart)) #currently on art
+
+kais$Country <- "Kenya"
+kais$df <- "kais"
+#create Year variable from interview date
+kais$Year <- as.numeric(substr(kais$Year, 6, 9))
+
+#recode
+#recode values that need to be in numeric
+kais$sex <- as.numeric(kais$sex)
+kais$urban_rural <- as.numeric(kais$urban_rural)
+kais$region <- as.numeric(kais$region)
+kais$wealth_quint <- as.numeric(kais$wealth_quint)
+kais$marital_status <- as.numeric(kais$marital_status)
+kais$hivstat <- as.numeric(kais$hivstat)
+kais$arv <- as.numeric(kais$arv)
+
+##determinants
+#recode urban_rural so that urban = 1 and rural = 2
+kais$urban_rural[kais$urban_rural == 1] <- 0
+kais$urban_rural[kais$urban_rural == 2] <- 1
+kais$urban_rural[kais$urban_rural == 0] <- 2
+
+#recode education
+kais$edu[kais$edu_ever == 2 | kais$edu_level == 1| kais$edu_level == 3] <- 0 #no education/primary education incomplete
+kais$edu[kais$edu_level == 2 | kais$edu_level == 4] #primary completed
+kais$edu[kais$edu_level == 5 | kais$edu_level == 6] #secondary completed
+kais$edu[kais$edu_level == 7 | kais$edu_level == 8 | kais$edu_level == 9] #more than secondary completed
+
+#recode marital status
+kais$marital_status[kais$marital_status == 1 | kais$marital_status == 2] <- 0 #never married (grouping in single with never married - even though these respondants would've answered yes to ever married)
+kais$marital_status[kais$marital_status == 5 | kais$marital_status == 6] <- 1 #currently married or cohabiting (the other surveys have categories separating living together and married - since I can't sparse out these two maybe I should change all the other variables but for now I'll leave it)
+# 3 - widowed
+# 4 - separated or divorced
+kais$marital_status[kais$marital_status == 9] <- NA 
+
+#recode last condom use
+kais$most_recent_condom_use[kais$most_recent_condom_use == 2] <- 0 #changing values of no from 2 to 0
+
+#recode num sex partners
+kais$sex_partners_ever[kais$sex_partners_ever == 888] <- NA
+kais$sex_partners_past_year[kais$sex_partners_past_year == 888] <- NA
+
+##hiv testing questions
+kais$hivstat[kais$hivstat == 2] <- 0 #changing values of hiv- from 2 to 0
+
+##cervical cancer questions
+#ever screened
+kais$ever_cc_tested[kais$ever_cc_tested == 2] <- 0 #changing values of no from 2 to 0
+kais$ever_cc_tested[kais$ever_cc_tested == 8] <- NA
+#results received
+kais$last_cc_test_result[kais$last_cc_test_result == 2] <- 0 #changing values of no from 2 to 0
+kais$last_cc_test_result[kais$last_cc_test_result == 8] <- NA
+#treatment referral
+kais$cc_treatment_referred[kais$cc_treatment_referred == 2] <- 0 #changing values of no from 2 to 0
+kais$cc_treatment_referred[kais$cc_treatment_referred == 8] <- NA
+
+save(kais, file = "Cleaned KAIS")
+```
+```{r missing}
+age.groups = data.frame(l_age = seq(15, 65, 5), u_age = c(seq(19, 64, 5), 1000))
+A <- nrow(age.groups)
+for(n in 1:nrow(kais_adult)){
+  for(a in 1:A){
+    if(!is.na(kais_adult$q_102[n]) & age.groups$l_age[a] <= kais_adult$q_102[n] & age.groups$u_age[a] >= kais_adult$q_102[n]){
+      agegr <- paste0(age.groups$l_age[a], "-", age.groups$u_age[a])
+      kais_adult$agegr[n] <- agegr
+    }
+  }
+}
+
+dat_missing <- data.frame(Survey = NA,
+                 agegr = NA,
+                 elg_resp = NA,
+                 resp = NA,
+                 dk = NA,
+                 missing = NA)
+n=1
+for(a in 1:sort(length(unique(kais_adult$agegr)))){
+   gr <- sort(unique(kais_adult$agegr))[a]
+   df <- filter(kais_adult, sex == 2 | !is.na(q_814))
+   df <- filter(df, agegr == gr)
+   id <- "kais"
+    tbl <- table(df$q_814)
+    df_tbl <- data.frame(tbl)
+    
+    elg_resp <- nrow(df)
+    resp <- sum(tbl)
+    missing <- elg_resp - resp
+    dk <- df_tbl[df_tbl$Var1 == 8 , 2]
+    if(length(dk) == 0){
+      dk = 0
+    }
+    
+    dat_missing[n, ] <- c(id, gr, elg_resp, resp, dk, missing)
+    print(id); print(gr); print(tbl)
+    n=n+1
+}
+```
