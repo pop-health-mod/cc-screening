@@ -1,0 +1,666 @@
+---
+title: "CC Treatment"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F,
+                      message = F,
+                      warning = F)
+```
+
+```{r import}
+library(haven)
+library(dplyr)
+library(survey)
+library(ggplot2)
+library(readxl)
+source("df_functions.R")
+
+load("Cleaned Pooled Surveys")
+load("Cleaned Indv Surveys")
+load("CC Treatment")
+surveys <- read_excel("surveys.xlsx", sheet = 1)
+all_q <- read_excel("surveys.xlsx", sheet = 2)
+
+pooled_surveys1 <- pooled_surveys
+pooled_surveys1$weight <- 1
+```
+
+```{r age settings}
+age.groups <- data.frame(c(18, 30, 0), c(49, 49, 1000))
+df <- data.frame(Age.Groups = c("18-49", "30-49", "All"))
+```
+
+<!-- # Follow up apt among women with abnormal results at last CC test -->
+```{r cc follow up function}
+lastcctestfu <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(last_cc_test_fu))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyciprop(~last_cc_test_fu, design = design)
+    ci <- confint(m)
+  
+    return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
+  }
+}
+```
+```{r phia1}
+lastcctestfu_ethphia <- df_age_fig(age.groups, ethphia, lastcctestfu, df)
+lastcctestfu_ethphia$df <- "ethphia"
+
+lastcctestfu_mlphia <- df_age_fig(age.groups, mlphia, lastcctestfu, df)
+lastcctestfu_mlphia$df <- "mlphia"
+
+lastcctestfu_zmphia <- df_age_fig(age.groups, zmphia, lastcctestfu, df)
+lastcctestfu_zmphia$df <- "zmphia"
+
+lastcctestfu_zwphia <- df_age_fig(age.groups, zwphia, lastcctestfu, df)
+lastcctestfu_zwphia$df <- "zwphia"
+
+lastcctestfu_pooled <- df_age_fig(age.groups, pooled_surveys1, lastcctestfu, df)
+lastcctestfu_pooled$df <- "pooled"
+```
+```{r combine1}
+lastcctestfu_df <- rbind(lastcctestfu_ethphia,
+                         lastcctestfu_mlphia,
+                         lastcctestfu_zmphia,
+                         lastcctestfu_zwphia,
+                         lastcctestfu_pooled)
+lastcctestfu_df <- left_join(lastcctestfu_df, surveys)
+```
+
+<!-- # Treatment among women with abnormal results at last CC test -->
+```{r cc treated function}
+cctreated <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_treated))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyciprop(~cc_treated, design = design)
+    ci <- confint(m)
+  
+    return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
+  }
+}
+options(survey.lonely.psu = "adjust")
+```
+```{r phia2}
+cctreated_mlphia <- df_age_fig(age.groups, mlphia, cctreated, df)
+cctreated_mlphia$df <- "mlphia"
+
+cctreated_tzphia <- df_age_fig(age.groups, tzphia, cctreated, df)
+cctreated_tzphia$df <- "tzphia"
+
+cctreated_zmphia <- df_age_fig(age.groups, zmphia, cctreated, df)
+cctreated_zmphia$df <- "zmphia"
+
+cctreated_cpvsteps <- df_age_fig(age.groups, cpvsteps, cctreated, df)
+cctreated_cpvsteps$df <- "cpvsteps"
+
+cctreated_pooled <- df_age_fig(age.groups, pooled_surveys1, cctreated, df)
+cctreated_pooled$df <- "pooled"
+
+cctreated(mlphia, 0, 1000)
+```
+```{r combine2}
+cctreated_df <- rbind(cctreated_mlphia,
+                         cctreated_tzphia,
+                         cctreated_zmphia,
+                         cctreated_cpvsteps,
+                         cctreated_pooled)
+cctreated_df <- left_join(cctreated_df, surveys)
+
+na.omit(mlphia[,c("cc_treated", "psu", "strata")])
+```
+
+<!-- # Treatment same day among women who were treated -->
+```{r treated sameday function}
+treatedsameday <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(treated_sameday))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyciprop(~treated_sameday, design = design)
+    ci <- confint(m)
+  
+    return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
+  }
+}
+```
+```{r phia3}
+# treatedsameday_mlphia <- df_age_fig(age.groups, mlphia, treatedsameday, df)
+# treatedsameday_mlphia$df <- "mlphia"
+# 
+# treatedsameday_tzphia <- df_age_fig(age.groups, tzphia, treatedsameday, df)
+# treatedsameday_tzphia$df <- "tzphia"
+# 
+# treatedsameday_zmphia <- df_age_fig(age.groups, zmphia, treatedsameday, df)
+# treatedsameday_zmphia$df <- "zmphia"
+# 
+# treatedsameday_pooled <- df_age_fig(age.groups, pooled_surveys1, treatedsameday, df)
+# treatedsameday_pooled$df <- "pooled"
+```
+```{r combine3}
+# treatedsameday_df <- rbind(treatedsameday_mlphia,
+#                          treatedsameday_tzphia,
+#                          treatedsameday_zmphia,
+#                          treatedsameday_pooled)
+# treatedsameday_df <- left_join(treatedsameday_df, surveys)
+```
+```{r, fig.height = 7}
+# lastcctestfu_df$Country[lastcctestfu_df$df == "pooled"] <- "Pooled (unweighted)"
+# lastcctestfu_df$Year[lastcctestfu_df$df == "pooled"] <- "Pooled (unweighted"
+# cctreated_df$Country[cctreated_df$df == "pooled"] <- "Pooled (unweighted)"
+# cctreated_df$Year[cctreated_df$df == "pooled"] <- "Pooled (unweighted"
+# treatedsameday_df$Country[treatedsameday_df$df == "pooled"] <- "Pooled (unweighted)"
+# treatedsameday_df$Year[treatedsameday_df$df == "pooled"] <- "Pooled (unweighted)"
+
+ggplot(lastcctestfu_df, aes(x = Country, y = Mean, fill = Age.Groups)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion had a follow up apt among those with an abnormal CC test results") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+```{r, fig.height = 7}
+ggplot(cctreated_df, aes(x = Country, y = Mean, fill = Age.Groups)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion treated among those with an abnormal CC test result") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+```{r, fig.height = 7}
+ggplot(treatedsameday_df, aes(x = Country, y = Mean, fill = Age.Groups)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion treated on the same day among those treated \ndue to abnormal CC test results") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+# Follow up/treatment by geotype
+```{r}
+urban_lastcctestfu <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(last_cc_test_fu) & !is.na(urban_rural))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyby(~last_cc_test_fu, ~urban_rural, svyciprop, vartype = "ci", method = "beta", design = design)
+    results <- data.frame()
+  
+    results <- data.frame(Geotype = c("Urban", "Rural"), Prop = m[,2], Lower = m[,3], Upper = m[,4])
+  
+    return(results)
+  }
+}
+
+urban_cctreated <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_treated) & !is.na(urban_rural))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyby(~cc_treated, ~urban_rural, svyciprop, vartype = "ci", method = "beta", design = design)
+    results <- data.frame()
+  
+    results <- data.frame(Geotype = c("Urban", "Rural"), Prop = m[,2], Lower = m[,3], Upper = m[,4])
+  
+    return(results)
+  }
+}
+
+urban_treatedsameday <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(treated_sameday) & !is.na(urban_rural))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyby(~treated_sameday, ~urban_rural, svyciprop, vartype = "ci", method = "beta", design = design)
+    results <- data.frame()
+  
+    results <- data.frame(Geotype = c("Urban", "Rural"), Prop = m[,2], Lower = m[,3], Upper = m[,4])
+  
+    return(results)
+  }
+}
+```
+```{r lastcctest urban}
+urban_lastcctestfu_ethphia <- urban_lastcctestfu(ethphia, 18, 49)
+urban_lastcctestfu_ethphia$df <- "ethphia"
+
+urban_lastcctestfu_mlphia <- urban_lastcctestfu(mlphia, 18, 49)
+urban_lastcctestfu_mlphia$df <- "mlphia"
+
+urban_lastcctestfu_zmphia <- urban_lastcctestfu(zmphia, 18, 49)
+urban_lastcctestfu_zmphia$df <- "zmphia"
+
+urban_lastcctestfu_zwphia <- urban_lastcctestfu(zwphia, 18, 49)
+urban_lastcctestfu_zwphia$df <- "zwphia"
+
+urban_lastcctestfu_pooled <- urban_lastcctestfu(pooled_surveys1, 18, 49)
+urban_lastcctestfu_pooled$df <- "pooled"
+```
+```{r cctreated urban}
+urban_cctreated_mlphia <- urban_cctreated(mlphia, 18, 49)
+urban_cctreated_mlphia$df <- "mlphia"
+
+urban_cctreated_tzphia <- urban_cctreated(tzphia, 18, 49)
+urban_cctreated_tzphia$df <- "tzphia"
+
+urban_cctreated_zmphia <- urban_cctreated(zmphia, 18, 49)
+urban_cctreated_zmphia$df <- "zmphia"
+
+urban_cctreated_pooled <- urban_cctreated(pooled_surveys1, 18, 49)
+urban_cctreated_pooled$df <- "pooled"
+```
+```{r treated sameday urban}
+# urban_treatedsameday_mlphia <- urban_treatedsameday(mlphia, 18, 49)
+# urban_treatedsameday_mlphia$df <- "mlphia"
+# 
+# urban_treatedsameday_tzphia <- urban_treatedsameday(tzphia, 18, 49)
+# urban_treatedsameday_tzphia$df <- "tzphia"
+# 
+# urban_treatedsameday_zmphia <- urban_treatedsameday(zmphia, 18, 49)
+# urban_treatedsameday_zmphia$df <- "zmphia"
+# 
+# urban_treatedsameday_pooled <- urban_treatedsameday(pooled_surveys1, 18, 49)
+# urban_treatedsameday_pooled$df <- "pooled"
+```
+```{r combine urban}
+# urban_lastcctestfu_df <- rbind(urban_lastcctestfu_ethphia,
+#                          urban_lastcctestfu_mlphia,
+#                          urban_lastcctestfu_zmphia,
+#                          urban_lastcctestfu_zwphia,
+#                          urban_lastcctestfu_pooled)
+# urban_lastcctestfu_df <- left_join(urban_lastcctestfu_df, surveys)
+# 
+# urban_cctreated_df <- rbind(urban_cctreated_mlphia,
+#                          urban_cctreated_tzphia,
+#                          urban_cctreated_zmphia,
+#                          urban_cctreated_pooled)
+# urban_cctreated_df <- left_join(urban_cctreated_df, surveys)
+# 
+# urban_treatedsameday_df <- rbind(urban_treatedsameday_mlphia,
+#                          urban_treatedsameday_tzphia,
+#                          urban_treatedsameday_zmphia,
+#                          urban_treatedsameday_pooled)
+# urban_treatedsameday_df <- left_join(urban_treatedsameday_df, surveys)
+```
+```{r, fig.height = 7}
+# urban_lastcctestfu_df$Country[urban_lastcctestfu_df$df == "pooled"] <- "Pooled (unweighted)"
+# urban_lastcctestfu_df$Year[urban_lastcctestfu_df$df == "pooled"] <- "Pooled (unweighted)"
+# urban_cctreated_df$Country[urban_cctreated_df$df == "pooled"] <- "Pooled (unweighted)"
+# urban_cctreated_df$Year[urban_cctreated_df$df == "pooled"] <- "Pooled (unweighted)"
+# urban_treatedsameday_df$Country[urban_treatedsameday_df$df == "pooled"] <- "Pooled (unweighted)"
+# urban_treatedsameday_df$Year[urban_treatedsameday_df$df == "pooled"] <- "Pooled (unweighted)"
+
+ggplot(urban_lastcctestfu_df, aes(x = Country, y = Prop, fill = Geotype)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion had a follow up apt by geotype \namong those with an abnormal CC test results") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+```{r, fig.height = 7}
+ggplot(urban_cctreated_df, aes(x = Country, y = Prop, fill = Geotype)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion treated by geotype \namong those with an abnormal CC test result") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+```{r, fig.height = 7}
+ggplot(urban_treatedsameday_df, aes(x = Country, y = Prop, fill = Geotype)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion treated on the same day by geotype \namong those treated due to abnormal CC test results") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+# Follow up/treatment by education
+```{r}
+edu_lastcctestfu <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(last_cc_test_fu) & !is.na(edu))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyby(~last_cc_test_fu, ~edu, svyciprop, vartype = "ci", method = "beta", design = design)
+    results <- data.frame(Level = m[,1], 
+                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
+  
+    return(results)
+  }
+}
+
+edu_cctreated <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_treated) & !is.na(edu))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyby(~cc_treated, ~edu, svyciprop, vartype = "ci", method = "beta", design = design)
+    results <- data.frame(Level = m[,1], 
+                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
+  
+    return(results)
+  }
+}
+
+edu_treatedsameday <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(treated_sameday) & !is.na(edu))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyby(~treated_sameday, ~edu, svyciprop, vartype = "ci", method = "beta", design = design)
+    results <- data.frame(Level = m[,1],
+                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
+  
+    return(results)
+  }
+}
+```
+```{r lastcctest edu}
+edu_lastcctestfu_ethphia <- edu_lastcctestfu(ethphia, 18, 49)
+edu_lastcctestfu_ethphia$df <- "ethphia"
+
+edu_lastcctestfu_mlphia <- edu_lastcctestfu(mlphia, 18, 49)
+edu_lastcctestfu_mlphia$df <- "mlphia"
+
+edu_lastcctestfu_zmphia <- edu_lastcctestfu(zmphia, 18, 49)
+edu_lastcctestfu_zmphia$df <- "zmphia"
+
+edu_lastcctestfu_zwphia <- edu_lastcctestfu(zwphia, 18, 49)
+edu_lastcctestfu_zwphia$df <- "zwphia"
+
+edu_lastcctestfu_pooled <- edu_lastcctestfu(pooled_surveys1, 18, 49)
+edu_lastcctestfu_pooled$df <- "pooled"
+```
+```{r cctreated edu}
+edu_cctreated_mlphia <- edu_cctreated(mlphia, 18, 49)
+edu_cctreated_mlphia$df <- "mlphia"
+
+edu_cctreated_tzphia <- edu_cctreated(tzphia, 18, 49)
+edu_cctreated_tzphia$df <- "tzphia"
+
+edu_cctreated_zmphia <- edu_cctreated(zmphia, 18, 49)
+edu_cctreated_zmphia$df <- "zmphia"
+
+edu_cctreated_pooled <- edu_cctreated(pooled_surveys1, 18, 49)
+edu_cctreated_pooled$df <- "pooled"
+```
+```{r treated sameday edu}
+# edu_treatedsameday_mlphia <- edu_treatedsameday(mlphia, 18, 49)
+# edu_treatedsameday_mlphia$df <- "mlphia"
+# 
+# edu_treatedsameday_tzphia <- edu_treatedsameday(tzphia, 18, 49)
+# edu_treatedsameday_tzphia$df <- "tzphia"
+# 
+# edu_treatedsameday_zmphia <- edu_treatedsameday(zmphia, 18, 49)
+# edu_treatedsameday_zmphia$df <- "zmphia"
+# 
+# edu_treatedsameday_pooled <- edu_treatedsameday(pooled_surveys1, 18, 49)
+# edu_treatedsameday_pooled$df <- "pooled"
+```
+```{r combine edu}
+# edu_lastcctestfu_df <- rbind(edu_lastcctestfu_ethphia,
+#                          edu_lastcctestfu_mlphia,
+#                          edu_lastcctestfu_zmphia,
+#                          edu_lastcctestfu_zwphia,
+#                          edu_lastcctestfu_pooled)
+# edu_lastcctestfu_df <- left_join(edu_lastcctestfu_df, surveys)
+# 
+# edu_cctreated_df <- rbind(edu_cctreated_mlphia,
+#                          edu_cctreated_tzphia,
+#                          edu_cctreated_zmphia,
+#                          edu_cctreated_pooled)
+# edu_cctreated_df <- left_join(edu_cctreated_df, surveys)
+
+# edu_treatedsameday_df <- rbind(edu_treatedsameday_mlphia,
+#                          edu_treatedsameday_tzphia,
+#                          edu_treatedsameday_zmphia,
+#                          edu_treatedsameday_pooled)
+# edu_treatedsameday_df <- left_join(edu_treatedsameday_df, surveys)
+# 
+# edu_lastcctestfu_df$Country[edu_lastcctestfu_df$df == "pooled"] <- "Pooled (unweighted)"
+# edu_lastcctestfu_df$Year[edu_lastcctestfu_df$df == "pooled"] <- "Pooled (unweighted)"
+# edu_cctreated_df$Country[edu_cctreated_df$df == "pooled"] <- "Pooled (unweighted)"
+# edu_cctreated_df$Year[edu_cctreated_df$df == "pooled"] <- "Pooled (unweighted)"
+# edu_treatedsameday_df$Country[edu_treatedsameday_df$df == "pooled"] <- "Pooled (unweighted)"
+# edu_treatedsameday_df$Year[edu_treatedsameday_df$df == "pooled"] <- "Pooled (unweighted)"
+# 
+# edu_lastcctestfu_df$Level <- factor(edu_lastcctestfu_df$Level,
+#                                     labels = c("No Education", "Primary", "Secondary", "More than Secondary"))
+# edu_cctreated_df$Level <- factor(edu_cctreated_df$Level,
+#                                     labels = c("No Education", "Primary", "Secondary", "More than Secondary"))
+# edu_treatedsameday_df$Level <- factor(edu_treatedsameday_df$Level,
+#                                     labels = c("No Education", "Primary", "Secondary", "More than Secondary"))
+```
+```{r, fig.height = 7}
+ggplot(edu_lastcctestfu_df, aes(x = Country, y = Prop, fill = Level)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion had a follow up apt by education level \namong those with an abnormal CC test results") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+```{r, fig.height = 7}
+ggplot(edu_cctreated_df, aes(x = Country, y = Prop, fill = Level)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion treated by education level \namong those with an abnormal CC test result") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+```{r, fig.height = 7}
+ggplot(edu_treatedsameday_df, aes(x = Country, y = Prop, fill = Level)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion treated on the same day by education level \namong those edu_treated due to abnormal CC test results") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+# Follow up/treatment by HIV status
+```{r}
+hiv_lastcctestfu <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(last_cc_test_fu) & !is.na(hivstat))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyby(~last_cc_test_fu, ~hivstat, svyciprop, vartype = "ci", method = "beta", design = design)
+    results <- data.frame()
+  
+    results <- data.frame(Status = c("HIV-", "HIV+"), Prop = m[,2], Lower = m[,3], Upper = m[,4])
+  
+    return(results)
+  }
+}
+
+hiv_cctreated <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_treated) & !is.na(hivstat))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyby(~cc_treated, ~hivstat, svyciprop, vartype = "ci", method = "beta", design = design)
+    results <- data.frame()
+  
+    results <- data.frame(Status = c("HIV-", "HIV+"), Prop = m[,2], Lower = m[,3], Upper = m[,4])
+  
+    return(results)
+  }
+}
+
+hiv_treatedsameday <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(treated_sameday) & !is.na(hivstat))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyby(~treated_sameday, ~hivstat, svyciprop, vartype = "ci", method = "beta", design = design)
+    results <- data.frame()
+  
+    results <- data.frame(Status = c("HIV-", "HIV+"), Prop = m[,2], Lower = m[,3], Upper = m[,4])
+  
+    return(results)
+  }
+}
+```
+```{r lastcctest hiv}
+hiv_lastcctestfu_ethphia <- hiv_lastcctestfu(ethphia, 18, 49)
+hiv_lastcctestfu_ethphia$df <- "ethphia"
+
+hiv_lastcctestfu_mlphia <- hiv_lastcctestfu(mlphia, 18, 49)
+hiv_lastcctestfu_mlphia$df <- "mlphia"
+
+hiv_lastcctestfu_zmphia <- hiv_lastcctestfu(zmphia, 18, 49)
+hiv_lastcctestfu_zmphia$df <- "zmphia"
+
+hiv_lastcctestfu_zwphia <- hiv_lastcctestfu(zwphia, 18, 49)
+hiv_lastcctestfu_zwphia$df <- "zwphia"
+
+hiv_lastcctestfu_pooled <- hiv_lastcctestfu(pooled_surveys1, 18, 49)
+hiv_lastcctestfu_pooled$df <- "pooled"
+```
+```{r cctreated hiv}
+hiv_cctreated_mlphia <- hiv_cctreated(mlphia, 18, 49)
+hiv_cctreated_mlphia$df <- "mlphia"
+
+hiv_cctreated_tzphia <- hiv_cctreated(tzphia, 18, 49)
+hiv_cctreated_tzphia$df <- "tzphia"
+
+hiv_cctreated_zmphia <- hiv_cctreated(zmphia, 18, 49)
+hiv_cctreated_zmphia$df <- "zmphia"
+
+hiv_cctreated_pooled <- hiv_cctreated(pooled_surveys1, 18, 49)
+hiv_cctreated_pooled$df <- "pooled"
+```
+```{r treated sameday hiv}
+# hiv_treatedsameday_mlphia <- hiv_treatedsameday(mlphia, 18, 49)
+# hiv_treatedsameday_mlphia$df <- "mlphia"
+# 
+# hiv_treatedsameday_tzphia <- hiv_treatedsameday(tzphia, 18, 49)
+# hiv_treatedsameday_tzphia$df <- "tzphia"
+# 
+# hiv_treatedsameday_zmphia <- hiv_treatedsameday(zmphia, 18, 49)
+# hiv_treatedsameday_zmphia$df <- "zmphia"
+# 
+# hiv_treatedsameday_pooled <- hiv_treatedsameday(pooled_surveys1, 18, 49)
+# hiv_treatedsameday_pooled$df <- "pooled"
+```
+```{r combine hiv}
+# hiv_lastcctestfu_df <- rbind(hiv_lastcctestfu_ethphia,
+#                          hiv_lastcctestfu_mlphia,
+#                          hiv_lastcctestfu_zmphia,
+#                          hiv_lastcctestfu_zwphia,
+#                          hiv_lastcctestfu_pooled)
+# hiv_lastcctestfu_df <- left_join(hiv_lastcctestfu_df, surveys)
+# 
+# hiv_cctreated_df <- rbind(hiv_cctreated_mlphia,
+#                          hiv_cctreated_tzphia,
+#                          hiv_cctreated_zmphia,
+#                          hiv_cctreated_pooled)
+# hiv_cctreated_df <- left_join(hiv_cctreated_df, surveys)
+# 
+# hiv_treatedsameday_df <- rbind(hiv_treatedsameday_mlphia,
+#                          hiv_treatedsameday_tzphia,
+#                          hiv_treatedsameday_zmphia,
+#                          hiv_treatedsameday_pooled)
+# hiv_treatedsameday_df <- left_join(hiv_treatedsameday_df, surveys)
+```
+```{r, fig.height = 7}
+# hiv_lastcctestfu_df$Country[hiv_lastcctestfu_df$df == "pooled"] <- "Pooled (unweighted)"
+# hiv_lastcctestfu_df$Year[hiv_lastcctestfu_df$df == "pooled"] <- "Pooled (unweighted)"
+# hiv_cctreated_df$Country[hiv_cctreated_df$df == "pooled"] <- "Pooled (unweighted)"
+# hiv_cctreated_df$Year[hiv_cctreated_df$df == "pooled"] <- "Pooled (unweighted)"
+# hiv_treatedsameday_df$Country[hiv_treatedsameday_df$df == "pooled"] <- "Pooled (unweighted)"
+# hiv_treatedsameday_df$Year[hiv_treatedsameday_df$df == "pooled"] <- "Pooled (unweighted)"
+
+ggplot(hiv_lastcctestfu_df, aes(x = Country, y = Prop, fill = Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion had a follow up apt by HIV status \namong those with an abnormal CC test results") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+```{r, fig.height = 7}
+ggplot(hiv_cctreated_df, aes(x = Country, y = Prop, fill = Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion treated by HIV status \namong those with an abnormal CC test result") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+```{r, fig.height = 7}
+ggplot(hiv_treatedsameday_df, aes(x = Country, y = Prop, fill = Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  ggtitle("Proportion treated on the same day by HIV status \namong those treated due to abnormal CC test results") +
+  facet_grid(.~Year, scales = "free", space = "free") +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
+```
+
+```{r save datasets}
+save(lastcctestfu_df, urban_lastcctestfu_df, edu_lastcctestfu_df, hiv_lastcctestfu_df,
+     cctreated_df, urban_cctreated_df, edu_cctreated_df, hiv_cctreated_df,
+     treatedsameday_df, urban_treatedsameday_df, edu_treatedsameday_df, hiv_treatedsameday_df,
+     file = "CC Treatment")
+#load("CC Treatment")
+```
