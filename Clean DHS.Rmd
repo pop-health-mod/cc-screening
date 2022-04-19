@@ -1,0 +1,1520 @@
+---
+title: "DHS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r import}
+library(haven)
+library(dplyr)
+library(survey)
+library(ggplot2)
+source("df_functions.R")
+load("Cleaned DHS")
+
+bnir <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Benin/IR/BJIR71FL.DTA")
+#bfir <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Burkina Faso/IR/BFIR62FL.DTA")
+ciir <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Cote d'Ivoire/IR/CIIR62FL.DTA")
+cmir <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Cameroon/IR/CMIR71FL.DTA")
+keir <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Kenya/IR/KEIR72FL.DTA")
+lsir09 <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Lesotho/2009/IR/LSIR61FL.DTA")
+lsir14 <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Lesotho/2014/IR/LSIR71FL.DTA")
+nmir00 <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Namibia/2000/IR/NMIR41FL.DTA")
+nmir13 <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Namibia/2013/IR/NMIR61FL.DTA")
+sair <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/South Africa/2016/IR/ZAIR71FL.DTA")
+saahw <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/South Africa/2016/AH/ZAAHW71FL.DTA")
+tzir <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Tanzania/IR/TZIR6AFL.DTA")
+zwir <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Zimbabwe/IR/ZWIR72FL.DTA")
+
+cibio <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Cote d'Ivoire/HIV/CIAR61FL.DTA")
+cmbio <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Cameroon/HIV/CMAR71FL.DTA")
+lsbio09 <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Lesotho/2009/HIV/LSAR61FL.DTA")
+lsbio14 <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Lesotho/2014/HIV/LSAR72FL.DTA")
+nmbio <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Namibia/2013/HIV/NMAR61FL.DTA")
+sabio <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/South Africa/2016/HIV/ZAAR71FL.DTA")
+tzbio <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Tanzania/HIV/TZAR6AFL.DTA")
+zwbio <- read_dta("~/Documents/GitHub/HPV-HIV-Model/DHS/Surveys/Zimbabwe/HIV/ZWAR71FL.DTA")
+
+load("Cleaned DHS")
+```
+
+# Clean survey data
+```{r Benin}
+bndhs <- select(bnir,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  cdc = v008a,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025, 
+                  wealth_quint = v190,
+                  wealth_score = v191,
+                  edu = v106, 
+                  literacy = v155, 
+                  health_insurance = v481,
+                  marital_status = v501,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, 
+                  sex_partners_ever = v836,
+                  #controlling behaviours
+                  ctrl_jealous = d101a,
+                  ctrl_accuse = d101b,
+                  ctrl_friends = d101c,
+                  ctrl_family = d101d,
+                  ctrl_location = d101e,
+                  num_ctrl = d102,
+                  weight_dv = d005,
+                  #cervical cancer questions
+                  heard_of_cc = s1423,
+                  heard_of_cc_test = s1424,
+                  ever_cc_tested = s1426,
+                  last_cc_test = s1427,
+                  last_cc_test_result = s1428,
+                  last_cc_test_fu = s1429))
+
+bndhs$weight = bndhs$weight_raw/1e6
+bndhs$Country = "Benin"
+bndhs$df = "bndhs"
+bndhs <- zap_labels(bndhs)
+  
+#Recode
+##determinants
+#marital_status recode
+bndhs$marital_status[bndhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_ever recode
+bndhs$sex_partners_ever[bndhs$sex_partners_ever == 98] <- NA
+
+#controlling behaviour recode
+bndhs$mar_ctrl_any[bndhs$num_ctrl == 0] <- 0
+bndhs$mar_ctrl_any[bndhs$num_ctrl != 0] <- 1
+
+bndhs$mar_ctrl_3p[bndhs$num_ctrl < 3] <- 0
+bndhs$mar_ctrl_3p[bndhs$num_ctrl >= 3] <- 1
+
+##cervical cancer questions
+#not sure if I should remove the NAs - will remove for now
+bndhs$ever_cc_tested[bndhs$ever_cc_tested == 8] <- NA #making answers of don't know = NA
+
+#create cc test past 3 Year question among everyone
+bndhs$cc_test_past_3y[!is.na(bndhs$ever_cc_tested)] <- 0
+bndhs$cc_test_past_3y[bndhs$ever_cc_tested == 1 & bndhs$last_cc_test <= 3] <- 1
+
+bndhs$cc_test_past_1y[!is.na(bndhs$ever_cc_tested)] <- 0
+bndhs$cc_test_past_1y[bndhs$ever_cc_tested == 1 & bndhs$last_cc_test <= 1] <- 1
+
+bndhs$cc_test_past_5y[!is.na(bndhs$ever_cc_tested)] <- 0
+bndhs$cc_test_past_5y[bndhs$ever_cc_tested == 1 & bndhs$last_cc_test <= 5] <- 1
+
+#clean cc test results
+bndhs$last_cc_test_result[bndhs$last_cc_test_result == 8] <- NA
+
+#create var for received cc test results
+bndhs$last_cc_test_result_received[!is.na(bndhs$last_cc_test_result)] <- 0
+bndhs$last_cc_test_result_received[bndhs$last_cc_test_result != 4] <- 1
+bndhs$last_cc_test_result_received[bndhs$last_cc_test_result == 8] <- NA
+
+#create variable for positive result on last cc test
+bndhs$last_cc_test_pos[bndhs$last_cc_test_result == 1] <- 0
+bndhs$last_cc_test_pos[bndhs$last_cc_test_result == 2] <- 1
+
+#find year at the midpoint of data
+design <- svydesign(data = bndhs, weights = ~weight, id = ~psu) #may need to add strata
+svymean(~cdc, design = design, vartype = "ci", method = "beta") #43102 is in 2018
+
+# age.groups = data.frame(l_age = seq(15, 65, 5), u_age = c(seq(19, 64, 5), 1000))
+# for(n in 1:nrow(bndhs)){
+#   for(a in 1:nrow(age.groups)){
+#     if(!is.na(bndhs$age[n]) & age.groups$l_age[a] <= bndhs$age[n] & age.groups$u_age[a] >= bndhs$age[n]){
+#       agegr <- paste0(age.groups$l_age[a], "-", age.groups$u_age[a])
+#       bndhs$agegr[n] <- agegr
+#     }
+#   }
+# }
+```
+```{r Cameroon}
+cmir2 <- left_join(cmir, cmbio, by=c("v001" = "hivclust", "v002" = "hivnumb", "v003" = "hivline"))
+cmdhs <- select(cmir2,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  wealth_quint = v190,
+                  wealth_score = v191,
+                  edu = v106,
+                  literacy = v155,
+                  health_insurance = v481,
+                  marital_status = v501,
+                  ever_marital_status = v502,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  sex_partners_ever = v836,
+                  #controlling behaviours
+                  ctrl_jealous = d101a,
+                  ctrl_accuse = d101b,
+                  ctrl_friends = d101c,
+                  ctrl_family = d101d,
+                  ctrl_location = d101e,
+                  num_ctrl = d102,
+                  weight_dv = d005,
+                  #cervical cancer questions,
+                  heard_of_cc = s1223,
+                  heard_of_cc_test = s1224,
+                  ever_cc_tested = s1226,
+                  last_cc_test = s1227,
+                  last_cc_test_results = s1228,
+                  cc_test_fu = s1229,
+                  #hiv testing
+                  hiv03,
+                  hiv_weight_raw = hiv05))
+
+cmdhs$weight <- cmdhs$weight_raw/1e6
+cmdhs$hiv_weight <- cmdhs$hiv_weight_raw/1e6
+cmdhs$Country <- "Cameroon"
+cmdhs$df = "cmdhs"
+cmdhs <- zap_labels(cmdhs)
+
+#Recode
+##determinants
+#marital_status recode
+cmdhs$marital_status[cmdhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_past_year recode
+cmdhs$sex_partners_past_year[cmdhs$sex_partners_past_year == 98] <- NA
+
+#sex_partners_ever recode
+cmdhs$sex_partners_ever[cmdhs$sex_partners_ever == 98] <- NA
+
+#controlling behaviour recode
+cmdhs$mar_ctrl_any[cmdhs$num_ctrl == 0] <- 0
+cmdhs$mar_ctrl_any[cmdhs$num_ctrl != 0] <- 1
+
+cmdhs$mar_ctrl_3p[cmdhs$num_ctrl < 3] <- 0
+cmdhs$mar_ctrl_3p[cmdhs$num_ctrl >= 3] <- 1
+
+##cervical cancer questions
+#not sure if making all the don't knows into NA's is the right move here
+cmdhs$ever_cc_tested[cmdhs$ever_cc_tested == 8] <- NA #making answers of don't know = NA
+cmdhs$last_cc_test[cmdhs$last_cc_test == 98] <- NA #making answers of don't know = NA
+cmdhs$last_cc_test_results[cmdhs$last_cc_test_results == 8] <- NA #making answers of don't know = NA
+
+#create cc test past 3 Year question among everyone
+cmdhs$cc_test_past_3y <- NA
+cmdhs$cc_test_past_3y[!is.na(cmdhs$ever_cc_tested)] <- 0
+cmdhs$cc_test_past_3y[cmdhs$ever_cc_tested == 1 & cmdhs$last_cc_test <= 3] <- 1
+
+#creating hivstat variable
+cmdhs$hivstat <- NA
+cmdhs$hivstat[cmdhs$hiv03 == 1 | cmdhs$hiv03 == 2 | cmdhs$hiv03 == 3] <- 1
+cmdhs$hivstat[cmdhs$hiv03 == 0] <- 0
+
+hivp_cmdhs <- filter(cmdhs, hivstat == 1)
+hivn_cmdhs <- filter(cmdhs, hivstat == 0)
+```
+```{r Cote dIvoire}
+ciir2 <- left_join(ciir, cibio, by=c("v001" = "hivclust", "v002" = "hivnumb", "v003" = "hivline"))
+cidhs <- select(ciir2,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  cmc = v008,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  wealth_quint = v190,
+                  wealth_score = v191,
+                  edu = v106,
+                  literacy = v155,
+                  health_insurance = v481,
+                  marital_status = v501,
+                  ever_marital_status = v502,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  sex_partners_ever = v836,
+                  #controlling behaviours
+                  ctrl_jealous = d101a,
+                  ctrl_accuse = d101b,
+                  ctrl_friends = d101c,
+                  ctrl_family = d101d,
+                  ctrl_location = d101e, #civ has other controlling behaviours as well d101f, and d101g related to money and working 
+                  num_ctrl = d102,
+                  weight_dv = d005,
+                  #cervical cancer questions,
+                  heard_of_cc = s1011c,
+                  ever_cc_tested = s1011d,
+                  #hiv testing
+                  hiv03,
+                  hiv_weight_raw = hiv05))
+
+cidhs$weight <- cidhs$weight_raw/1e6
+cidhs$hiv_weight <- cidhs$hiv_weight_raw/1e6
+cidhs$Country <- "Cote d'Ivoire"
+cidhs$df = "cidhs"
+cidhs <- zap_labels(cidhs)
+
+#Recode
+##determinants
+#marital_status recode
+cidhs$marital_status[cidhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_past_year recode
+cidhs$sex_partners_past_year[cidhs$sex_partners_past_year == 98] <- NA
+
+#sex_partners_ever recode
+cidhs$sex_partners_ever[cidhs$sex_partners_ever == 98] <- NA
+
+#controlling behaviour recode
+cidhs$mar_ctrl_any[cidhs$num_ctrl == 0] <- 0
+cidhs$mar_ctrl_any[cidhs$num_ctrl != 0] <- 1
+
+cidhs$mar_ctrl_3p[cidhs$num_ctrl < 3] <- 0
+cidhs$mar_ctrl_3p[cidhs$num_ctrl >= 3] <- 1
+
+##cervical cancer questions
+#not sure if making all the don't knows into NA's is the right move here
+cidhs$heard_of_cc[cidhs$heard_of_cc == 8] <- NA
+cidhs$ever_cc_tested[cidhs$ever_cc_tested == 8] <- NA #making answers of don't know = NA
+cidhs$ever_cc_tested[cidhs$heard_of_cc == 0] <- 0 #ever cc tested only asked to those who have heard of cc, so making this change to keep the denominator among all women
+cidhs$ever_cc_tested[cidhs$heard_of_cc == 8] <- 8
+
+#creating hivstat variable
+cidhs$hivstat <- NA
+cidhs$hivstat[cidhs$hiv03 == 1 | cidhs$hiv03 == 2 | cidhs$hiv03 == 3] <- 1
+cidhs$hivstat[cidhs$hiv03 == 0] <- 0
+
+hivp_cidhs <- filter(cidhs, hivstat == 1)
+hivn_cidhs <- filter(cidhs, hivstat == 0)
+
+#find year at the midpoint of data
+design <- svydesign(data = cidhs, weights = ~weight, id = ~psu) #may need to add strata
+svymean(~cmc, design = design, vartype = "ci", method = "beta") #1345 months is in 2012
+```
+```{r Kenya}
+kedhs <- select(keir,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  wealth_quint = v190,
+                  wealth_score = v191,
+                  edu = v106,
+                  literacy = v155,
+                  health_insurance = v481,
+                  marital_status = v501,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  sex_partners_ever = v836,
+                  #controlling behaviours
+                  ctrl_jealous = d101a,
+                  ctrl_accuse = d101b,
+                  ctrl_friends = d101c,
+                  ctrl_family = d101d,
+                  ctrl_location = d101e,
+                  num_ctrl = d102,
+                  weight_dv = d005,
+                  #cervical cancer questions
+                  heard_of_cc = s1008a,
+                  ever_cc_tested = s1008b,
+                  cc_test_pap_smear = s1008ca,
+                  cc_test_vi = s1008cb,
+                  cc_test_dk = s1008cx))
+
+kedhs$weight = kedhs$weight_raw/1e6
+kedhs$Country = "Kenya"
+kedhs$df = "kedhs"
+kedhs <- zap_labels(kedhs)
+
+#Recode
+##determinants
+#marital_status recode
+kedhs$marital_status[kedhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_ever recode
+kedhs$sex_partners_ever[kedhs$sex_partners_ever == 98] <- NA
+
+#controlling behaviour recode
+kedhs$mar_ctrl_any[kedhs$num_ctrl == 0] <- 0
+kedhs$mar_ctrl_any[kedhs$num_ctrl != 0] <- 1
+
+kedhs$mar_ctrl_3p[kedhs$num_ctrl < 3] <- 0
+kedhs$mar_ctrl_3p[kedhs$num_ctrl >= 3] <- 1
+
+##cervical cancer questions
+kedhs$ever_cc_tested[kedhs$heard_of_cc == 0] <- 0 #ever cc tested only asked to those who have heard of cc, so making this change to keep the denominator among all women
+
+#creating variables for ever tested for different types of test
+kedhs$ever_had_pap_smear <- kedhs$cc_test_pap_smear
+kedhs$ever_had_pap_smear[kedhs$ever_cc_tested == 0] <- 0
+kedhs$ever_had_pap_smear[is.na(kedhs$ever_cc_tested)] <- NA
+
+kedhs$ever_had_vi <- kedhs$cc_test_vi
+kedhs$ever_had_vi[kedhs$ever_cc_tested == 0] <- 0
+```
+```{r Lesotho 2009}
+lsir092 <- left_join(lsir09, lsbio09, by=c("v001" = "hivclust", "v002" = "hivnumb", "v003" = "hivline"))
+ls9dhs <- select(lsir092,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  wealth_quint = v190,
+                  edu = v106,
+                  literacy = v155,
+                  health_insurance = v481,
+                  marital_status = v501,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  sex_partners_ever = v836,
+                  #cervical cancer questions
+                  heard_of_pap_smear = s1012l,
+                  ever_had_pap_smear = s1012m,
+                  last_pap_smear = s1012n, #categorical
+                  #hiv testing
+                  hiv03,
+                  hiv_weight_raw = hiv05))
+
+ls9dhs$weight <- ls9dhs$weight_raw/1e6
+ls9dhs$hiv_weight <- ls9dhs$hiv_weight_raw/1e6
+ls9dhs$Country <- "Lesotho"
+ls9dhs$df = "ls9dhs"
+ls9dhs <- zap_labels(ls9dhs)
+
+#Recode
+##determinants
+#marital_status recode
+ls9dhs$marital_status[ls9dhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_past_year recode
+ls9dhs$sex_partners_past_year[ls9dhs$sex_partners_past_year == 98] <- NA
+
+#sex_partners_ever recode
+ls9dhs$sex_partners_ever[ls9dhs$sex_partners_ever == 98] <- NA
+
+##cervical cancer questions
+ls9dhs$ever_had_pap_smear[ls9dhs$heard_of_pap_smear == 0] <- 0 #ever cc tested only asked to those who have heard of cc, so making this change to keep the denominator among all women
+
+#create cc test past 3 Year question among everyone
+ls9dhs$pap_smear_past_3y[!is.na(ls9dhs$ever_had_pap_smear)] <- 0
+ls9dhs$pap_smear_past_3y[ls9dhs$ever_had_pap_smear == 1 & ls9dhs$last_pap_smear <= 2] <- 1 
+
+ls9dhs$pap_smear_past_1y[!is.na(ls9dhs$ever_had_pap_smear)] <- 0
+ls9dhs$pap_smear_past_1y[ls9dhs$ever_had_pap_smear == 1 & ls9dhs$last_pap_smear <= 1] <- 1
+
+#creating hivstat variable
+ls9dhs$hivstat <- NA
+ls9dhs$hivstat[ls9dhs$hiv03 == 1 | ls9dhs$hiv03 == 2 | ls9dhs$hiv03 == 3] <- 1
+ls9dhs$hivstat[ls9dhs$hiv03 == 0] <- 0
+
+hivp_ls9dhs <- filter(ls9dhs, hivstat == 1)
+hivn_ls9dhs <- filter(ls9dhs, hivstat == 0)
+
+#ls9dhs <- select(ls9dhs, -"pap_smear_past_5y")
+```
+```{r Lesotho 2014}
+lsir142 <- left_join(lsir14, lsbio14, by=c("v001" = "hivclust", "v002" = "hivnumb", "v003" = "hivline"))
+ls14dhs <- select(lsir142,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  wealth_quint = v190,
+                  edu = v106,
+                  literacy = v155,
+                  health_insurance = v481,
+                  marital_status = v501,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  sex_partners_ever = v836,
+                  #cervical cancer questions
+                  heard_of_pap_smear = s1012n,
+                  ever_had_pap_smear = s1012o,
+                  last_pap_smear = s1012p, #categorical
+                  #hiv testing
+                  hiv03,
+                  hiv_weight_raw = hiv05))
+
+ls14dhs$weight <- ls14dhs$weight_raw/1e6
+ls14dhs$hiv_weight <- ls14dhs$hiv_weight_raw/1e6
+ls14dhs$Country <- "Lesotho"
+ls14dhs$df = "ls14dhs"
+ls14dhs <- zap_labels(ls14dhs)
+
+#Recode
+##determinants
+#marital_status recode
+ls14dhs$marital_status[ls14dhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_ever recode
+ls14dhs$sex_partners_ever[ls14dhs$sex_partners_ever == 98] <- NA
+
+##cervical cancer questions
+ls14dhs$ever_had_pap_smear[ls14dhs$heard_of_pap_smear == 0] <- 0
+
+#create cc test past 3 Year question among everyone
+ls14dhs$pap_smear_past_3y[!is.na(ls14dhs$ever_had_pap_smear)] <- 0
+ls14dhs$pap_smear_past_3y[ls14dhs$ever_had_pap_smear == 1 & ls14dhs$last_pap_smear <= 2] <- 1
+
+ls14dhs$pap_smear_past_1y[!is.na(ls14dhs$ever_had_pap_smear)] <- 0
+ls14dhs$pap_smear_past_1y[ls14dhs$ever_had_pap_smear == 1 & ls14dhs$last_pap_smear <= 1] <- 1
+
+#creating hivstat variable
+ls14dhs$hivstat <- NA
+ls14dhs$hivstat[ls14dhs$hiv03 == 1 | ls14dhs$hiv03 == 2 | ls14dhs$hiv03 == 3] <- 1
+ls14dhs$hivstat[ls14dhs$hiv03 == 0] <- 0
+
+hivp_ls14dhs <- filter(ls14dhs, hivstat == 1)
+hivn_ls14dhs <- filter(ls14dhs, hivstat == 0)
+```
+```{r Namibia 2000}
+nm0dhs <- select(nmir00,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  edu = v106,
+                  literacy = v155,
+                  marital_status = v501,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  #cervical cancer questions
+                  ever_had_pap_smear = s484))
+
+nm0dhs$weight <- nm0dhs$weight_raw/1e6
+nm0dhs$Country <- "Namibia"
+nm0dhs$df = "nm0dhs"
+nm0dhs <- zap_labels(nm0dhs)
+
+#recode
+##determinants
+#marital_status recode
+nm0dhs$marital_status[nm0dhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_past_year recode
+nm0dhs$sex_partners_past_year[nm0dhs$sex_partners_past_year == 98] <- NA
+
+##cervical cancer questions
+nm0dhs$ever_had_pap_smear[nm0dhs$ever_had_pap_smear == 8] <- NA
+
+table(nm0dhs$ever_had_pap_smear)
+```
+```{r Namibia 2013}
+nmir132 <- left_join(nmir13, nmbio, by=c("v001" = "hivclust", "v002" = "hivnumb", "v003" = "hivline"))
+nm13dhs <- select(nmir132,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  wealth_quint = v190,
+                  edu = v106,
+                  literacy = v155,
+                  health_insurance = v481,
+                  marital_status = v501,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  sex_partners_ever = v836,
+                  #controlling behaviours
+                  ctrl_jealous = d101a,
+                  ctrl_accuse = d101b,
+                  ctrl_friends = d101c,
+                  ctrl_family = d101d,
+                  ctrl_location = d101e,
+                  num_ctrl = d102,
+                  weight_dv = d005,
+                  #cervical cancer questions
+                  heard_of_cc = s1010n,
+                  ever_cc_tested = s1010o,
+                  cc_test_pap_smear = s1010p1,
+                  cc_test_vi = s1010p2,
+                  cc_test_dk = s1010p3,
+                  #hiv testing
+                  hiv03,
+                  hiv_weight_raw = hiv05))
+
+nm13dhs$weight <- nm13dhs$weight_raw/1e6
+nm13dhs$hiv_weight <- nm13dhs$hiv_weight_raw/1e6
+nm13dhs$Country <- "Namibia"
+nm13dhs$df = "nm13dhs"
+nm13dhs <- zap_labels(nm13dhs)
+
+#recode
+##determinants
+#marital_status recode
+nm13dhs$marital_status[nm13dhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_past_year recode
+nm13dhs$sex_partners_past_year[nm13dhs$sex_partners_past_year == 98] <- NA
+
+#sex_partners_ever recode
+nm13dhs$sex_partners_ever[nm13dhs$sex_partners_ever == 98] <- NA
+
+#controlling behaviour recode
+nm13dhs$mar_ctrl_any[nm13dhs$num_ctrl == 0] <- 0
+nm13dhs$mar_ctrl_any[nm13dhs$num_ctrl != 0] <- 1
+
+nm13dhs$mar_ctrl_3p[nm13dhs$num_ctrl < 3] <- 0
+nm13dhs$mar_ctrl_3p[nm13dhs$num_ctrl >= 3] <- 1
+
+##cervical cancer questions
+nm13dhs$ever_cc_tested[nm13dhs$heard_of_cc == 0] <- 0 #ever cc tested only asked to those who have heard of cc, so making this change to keep the denominator among all women
+
+#changing values of don't know to NA - need to check this is appropriate
+nm13dhs$ever_cc_tested[nm13dhs$ever_cc_tested == 8] <- NA
+nm13dhs$cc_test_pap_smear[nm13dhs$cc_test_pap_smear == 8] <- NA
+nm13dhs$cc_test_vi[nm13dhs$cc_test_vi == 8] <- NA
+nm13dhs$cc_test_dk[nm13dhs$cc_test_dk == 8] <- NA
+
+#creating variables for ever tested for different types of test
+nm13dhs$ever_had_pap_smear <- nm13dhs$cc_test_pap_smear
+nm13dhs$ever_had_pap_smear[nm13dhs$ever_cc_tested == 0] <- 0
+nm13dhs$ever_had_pap_smear[is.na(nm13dhs$ever_cc_tested)] <- NA
+
+nm13dhs$ever_had_vi<- nm13dhs$cc_test_vi
+nm13dhs$ever_had_vi[nm13dhs$ever_cc_tested == 0] <- 0
+#creating hivstat variable
+nm13dhs$hivstat <- NA
+nm13dhs$hivstat[nm13dhs$hiv03 == 1 | nm13dhs$hiv03 == 2 | nm13dhs$hiv03 == 3] <- 1
+nm13dhs$hivstat[nm13dhs$hiv03 == 0] <- 0
+
+hivp_nm13dhs <- filter(nm13dhs, hivstat == 1)
+hivn_nm13dhs <- filter(nm13dhs, hivstat == 0)
+nm13dhs <- filter(nm13dhs, weight != 0)
+```
+```{r South Africa}
+sair2 <- left_join(saahw, sair)
+sair2 <- left_join(sair2, sabio, by=c("v001" = "hivclust", "v002" = "hivnumb", "v003" = "hivline"))
+
+sadhs <- select(sair2,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  wealth_quint = v190,
+                  wealth_score = v191a,
+                  edu = v106,
+                  literacy = v155,
+                  health_insurance = v481,
+                  marital_status = v501,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  sex_partners_ever = v836,
+                  #controlling behaviours
+                  ctrl_jealous = d101a,
+                  ctrl_accuse = d101b,
+                  ctrl_friends = d101c,
+                  ctrl_family = d101d,
+                  ctrl_location = d101e,
+                  num_ctrl = d102,
+                  weight_dv = d005,
+                  #cervical cancer questions
+                  ever_had_pap_smear = s1407,
+                  last_pap_smear = s1408,
+                  pap_smear_results = s1409,
+                  #hiv testing
+                  hiv03,
+                  hiv_weight_raw = hiv05))
+
+sadhs$weight <- sadhs$weight_raw/1e6
+sadhs$hiv_weight <- sadhs$hiv_weight_raw/1e6
+sadhs$Country <- "South Africa"
+sadhs$df = "sadhs"
+sadhs <- zap_labels(sadhs)
+
+#Recode
+##determinants
+#marital_status recode
+sadhs$marital_status[sadhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_ever recode
+sadhs$sex_partners_ever[sadhs$sex_partners_ever == 98] <- NA
+
+#controlling behaviour recode
+sadhs$mar_ctrl_any[sadhs$num_ctrl == 0] <- 0
+sadhs$mar_ctrl_any[sadhs$num_ctrl != 0] <- 1
+
+sadhs$mar_ctrl_3p[sadhs$num_ctrl < 3] <- 0
+sadhs$mar_ctrl_3p[sadhs$num_ctrl >= 3] <- 1
+
+##cervical cancer questions
+#clean pap smear related data
+sadhs$ever_had_pap_smear[sadhs$ever_had_pap_smear == 8] <- NA
+sadhs$pap_smear_results[sadhs$pap_smear_results == 8] <- NA
+
+#create cc test past 3 Year question among everyone
+sadhs$pap_smear_past_3y[!is.na(sadhs$ever_had_pap_smear)] <- 0
+sadhs$pap_smear_past_3y[sadhs$ever_had_pap_smear == 1 & sadhs$last_pap_smear == 1] <- 1
+
+sadhs$pap_smear_past_5y[!is.na(sadhs$ever_had_pap_smear)] <- 0
+sadhs$pap_smear_past_5y[sadhs$ever_had_pap_smear == 1 & sadhs$last_pap_smear <= 2] <- 1
+
+#clean variable for received results for last cc test
+sadhs$last_cc_test_result_received[!is.na(sadhs$pap_smear_results)] <- 0
+sadhs$last_cc_test_result_received[sadhs$pap_smear_results == 1] <- 1
+sadhs$last_cc_test_result_received[sadhs$pap_smear_results == 8] <- NA
+
+#creating hivstat variable
+sadhs$hivstat <- NA
+sadhs$hivstat[sadhs$hiv03 == 1 | sadhs$hiv03 == 2 | sadhs$hiv03 == 3] <- 1
+sadhs$hivstat[sadhs$hiv03 == 0] <- 0
+
+hivp_sadhs <- filter(sadhs, hivstat == 1)
+hivn_sadhs <- filter(sadhs, hivstat == 0)
+
+sadhs <- filter(sadhs, weight != 0)
+```
+```{r Tanzania}
+tzir2 <- left_join(tzir, tzbio, by=c("v001" = "hivclust", "v002" = "hivnumb", "v003" = "hivline"))
+tzdhs <- select(tzir2,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  cmc = v008,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  wealth_quint = v190,
+                  edu = v106,
+                  health_insurance = v481,
+                  marital_status = v501,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  sex_partners_ever = v836,
+                  #cervical cancer questions
+                  heard_of_cc = s705a,
+                  talked_about_cc_past_6mo = s705b,
+                  #hiv testing
+                  hiv03,
+                  hiv_weight_raw = hiv05))
+
+tzdhs$weight <- tzdhs$weight_raw/1e6
+tzdhs$hiv_weight <- tzdhs$hiv_weight_raw/1e6
+tzdhs$Country <- "Tanzania"
+tzdhs$df = "tzdhs"
+tzdhs <- zap_labels(tzdhs)
+
+#recode
+##determinants
+#marital_status recode
+tzdhs$marital_status[tzdhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#most_recent_condom_use recode
+tzdhs$most_recent_condom_use[tzdhs$most_recent_condom_use == 9] <- NA
+
+#sex_partners_past_year recode
+tzdhs$sex_partners_past_year[tzdhs$sex_partners_past_year == 99] <- NA
+
+#sex_partners_ever recode
+tzdhs$sex_partners_ever[tzdhs$sex_partners_ever == 98 | tzdhs$sex_partners_ever == 99] <- NA
+
+##cervical cancer questions
+#not sure if making all the don't knows into NA's is the right move here
+tzdhs$heard_of_cc[tzdhs$heard_of_cc == 8] <- NA
+tzdhs$heard_of_cc[tzdhs$heard_of_cc == 9] <- NA
+
+#creating hivstat variable
+tzdhs$hivstat <- NA
+tzdhs$hivstat[tzdhs$hiv03 == 1 | tzdhs$hiv03 == 2 | tzdhs$hiv03 == 3] <- 1
+tzdhs$hivstat[tzdhs$hiv03 == 0] <- 0
+
+hivp_tzdhs <- filter(tzdhs, hivstat == 1)
+hivn_tzdhs <- filter(tzdhs, hivstat == 0)
+
+#find year at the midpoint of data
+design <- svydesign(data = tzdhs, weights = ~weight, id = ~psu) #may need to add strata
+svymean(~cmc, design = design, vartype = "ci", method = "beta") #1346 months is in 2012
+```
+```{r Zimbabwe}
+zwir2 <- left_join(zwir, zwbio, by=c("v001" = "hivclust", "v002" = "hivnumb", "v003" = "hivline"))
+zwdhs <- select(zwir2,
+                c(psu = v001,
+                  weight_raw = v005,
+                  Year = v007,
+                  age = v012,
+                  agegr = v013,
+                  strata = v022,
+                  region = v024,
+                  urban_rural = v025,
+                  wealth_quint = v190,
+                  wealth_score = v191a,
+                  edu = v106,
+                  literacy = v155,
+                  health_insurance = v481,
+                  marital_status = v501,
+                  most_recent_condom_use = v761,
+                  sex_partners_past_year = v766b, #includes spouse (v766a excludes spouse)
+                  sex_partners_ever = v836,
+                  #controlling behaviours
+                  ctrl_jealous = d101a,
+                  ctrl_accuse = d101b,
+                  ctrl_friends = d101c,
+                  ctrl_family = d101d,
+                  ctrl_location = d101e,
+                  num_ctrl = d102,
+                  weight_dv = d005,
+                  #cervical cancer questions
+                  heard_of_cc = s1108aa,
+                  ever_cc_tested = s1108ab,
+                  last_cc_test = s1108ac,
+                  last_cc_test_d = s1108acd,
+                  last_cc_test_m = s1108acm,
+                  last_cc_test_y = s1108acy,
+                  #hiv testing
+                  hiv03,
+                  hiv_weight_raw = hiv05))
+
+zwdhs$weight <- zwdhs$weight_raw/1e6
+zwdhs$hiv_weight <- zwdhs$hiv_weight_raw/1e6
+zwdhs$Country <- "Zimbabwe"
+zwdhs$df = "zwdhs"
+zwdhs <- zap_labels(zwdhs)
+
+#Recode
+##determinants
+#marital_status recode
+zwdhs$marital_status[zwdhs$marital_status == 5] <- 4 #coding divorced and no longer living together as the same thing
+
+#sex_partners_past_year recode
+zwdhs$sex_partners_past_year[zwdhs$sex_partners_past_year == 98] <- NA
+
+#sex_partners_ever recode
+zwdhs$sex_partners_ever[zwdhs$sex_partners_ever == 98] <- NA
+
+#controlling behaviour recode
+zwdhs$mar_ctrl_any[zwdhs$num_ctrl == 0] <- 0
+zwdhs$mar_ctrl_any[zwdhs$num_ctrl != 0] <- 1
+
+zwdhs$mar_ctrl_3p[zwdhs$num_ctrl < 3] <- 0
+zwdhs$mar_ctrl_3p[zwdhs$num_ctrl >= 3] <- 1
+
+##cervical cancer questions
+zwdhs$ever_cc_tested[zwdhs$heard_of_cc == 0] <- 0 #ever cc tested only asked to those who have heard of cc, so making this change to keep the denominator among all women
+
+#not sure if making all the don't knows into NA's is the right move here
+zwdhs$heard_of_cc[zwdhs$heard_of_cc == 8] <- NA
+zwdhs$ever_cc_tested[zwdhs$ever_cc_tested == 8] <- NA 
+zwdhs$last_cc_test_m[zwdhs$last_cc_test_m == 95 | zwdhs$last_cc_test_m == 98] <- NA
+zwdhs$last_cc_test_y[zwdhs$last_cc_test_y == 9998] <- NA
+
+#create cc test past 3 Year question among everyone
+zwdhs$cc_test_past_3y <- NA
+zwdhs$cc_test_past_3y[!is.na(zwdhs$ever_cc_tested)] <- 0
+zwdhs$cc_test_past_3y[zwdhs$ever_cc_tested == 1 & zwdhs$last_cc_test >= 401 & zwdhs$last_cc_test <= 403] <- 1 #this is done because there are months that are reported above 36 (3 years)
+zwdhs$cc_test_past_3y[zwdhs$ever_cc_tested == 1 & zwdhs$last_cc_test <= 336] <- 1
+zwdhs$cc_test_past_3y[zwdhs$last_cc_test >= 994] <- NA
+
+zwdhs$cc_test_past_1y <- NA
+zwdhs$cc_test_past_1y[!is.na(zwdhs$ever_cc_tested)] <- 0
+zwdhs$cc_test_past_1y[zwdhs$ever_cc_tested == 1 & zwdhs$last_cc_test == 401] <- 1
+zwdhs$cc_test_past_1y[zwdhs$ever_cc_tested == 1 & zwdhs$last_cc_test <= 312] <- 1
+zwdhs$cc_test_past_1y[zwdhs$last_cc_test >= 994] <- NA
+
+zwdhs$cc_test_past_5y <- NA
+zwdhs$cc_test_past_5y[!is.na(zwdhs$ever_cc_tested)] <- 0
+zwdhs$cc_test_past_5y[zwdhs$ever_cc_tested == 1 & zwdhs$last_cc_test <= 405] <- 1
+zwdhs$cc_test_past_5y[zwdhs$last_cc_test >= 994] <- NA
+
+#creating hivstat variable
+zwdhs$hivstat <- NA
+zwdhs$hivstat[zwdhs$hiv03 == 1 | zwdhs$hiv03 == 2 | zwdhs$hiv03 == 3] <- 1
+zwdhs$hivstat[zwdhs$hiv03 == 0] <- 0
+
+hivp_zwdhs <- filter(zwdhs, hivstat == 1)
+hivn_zwdhs <- filter(zwdhs, hivstat == 0)
+```
+
+```{r check missing data}
+bn <- select(bnir,
+             agegr = v013,
+             heard_of_cc = s1423,
+             ever_cc_tested = s1426)
+cm <- select(cmir,
+             agegr = v013,
+             heard_of_cc = s1223,
+             ever_cc_tested = s1226)
+ci <- select(ciir,
+             agegr = v013,
+             heard_of_cc = s1011c,
+             ever_cc_tested = s1011d)
+ke <- select(keir,
+             agegr = v013,
+             heard_of_cc = s1008a,
+             ever_cc_tested = s1008b)
+ls9 <- select(lsir09,
+             agegr = v013,
+             heard_of_cc = s1012l, #acc pap smear q but keeping name for consistency
+             ever_cc_tested = s1012m)
+ls14 <- select(lsir14,
+             agegr = v013,
+             heard_of_cc = s1012n, #acc pap smear q but keeping name for consistency
+             ever_cc_tested = s1012o)
+nm0 <- select(nmir00,
+             agegr = v013, #acc pap smear q but keeping name for consistency
+             ever_cc_tested = s484)
+nm13 <- select(nmir13,
+             agegr = v013, 
+             heard_of_cc = s1010n,
+             ever_cc_tested = s1010o)
+sa <- select(saahw,
+             agegr = v013, 
+             ever_cc_tested = s1407)
+zw <- select(zwir,
+             agegr = v013, 
+             heard_of_cc = s1108aa,
+             ever_cc_tested = s1108ab)
+dhs_list <- list(bn, ci, cm, ke, ls9, ls14, nm0, nm13, sa, zw)
+names(dhs_list) <- c("bndhs", "cidhs", "cmdhs", "kedhs", "ls9dhs", 
+                     "ls14dhs", "nm0dhs", "nm13dhs", "sadhs", "zwdhs")
+for(i in 1:length(dhs_list)){
+  print(names(dhs_list)[[i]])
+  if(length(dhs_list[[i]]$heard_of_cc) > 0){
+    dhs_list[[i]]$ever_cc_tested[dhs_list[[i]]$heard_of_cc == 0] <- 0
+  }
+}
+
+dat_missing <- data.frame(Survey = NA,
+                 agegr = NA,
+                 elg_resp = NA,
+                 resp = NA,
+                 dk = NA,
+                 missing = NA)
+n=1
+for(i in 1:length(dhs_list)){
+  for(a in 1:length(sort(unique(dhs_list[[i]]$agegr)))){
+    gr <- sort(unique(dhs_list[[i]]$agegr))[a]
+    df <- filter(dhs_list[[i]], agegr == gr)
+    id <- names(dhs_list)[i]
+    dk <- NA
+    tbl <- table(df$ever_cc_tested)
+    df_tbl <- data.frame(tbl)
+    
+    elg_resp <- nrow(df)
+    resp <- sum(tbl)
+    missing <- elg_resp - resp
+    
+    dk <- df_tbl[df_tbl$Var1 == 8 , 2]
+    if(length(dk) == 0){
+      dk = 0
+    }
+    print(id); print(tbl)
+    dat_missing[n, ] <- c(id, gr, elg_resp, resp, dk, missing)
+    n=n+1
+  }
+}
+
+dat_missing$agegr <- factor(dat_missing$agegr, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+                            labels = c("15-19", "20-24", "25-29", "30-34", "35-39", 
+                                       "40-44", "45-49", "50-54", "55-59", "60-64"))
+
+for(i in 1:length(dhs_list)){
+  print(unique(dhs_list[[i]]$df))
+  print(sum(as.numeric(dat_missing[dat_missing$Survey == unique(dhs_list[[i]]$df), "dk"])))
+}
+table(cidhs$ever_cc_tested)
+```
+
+```{r save}
+save(bndhs, cidhs, cmdhs, kedhs, ls9dhs, ls14dhs, nm0dhs, nm13dhs, sadhs, tzdhs, zwdhs, file = "Cleaned DHS")
+```
+<!-- # Analysis -->
+<!-- <!-- svy designs don't need fpc value as they sampled less than 5% of the population --> -->
+<!-- <!-- thus also only the first stage of sampling design needs to be included in svydesign--> -->
+<!-- ## Ever heard of CC -->
+<!-- ```{r} -->
+<!-- age.groups <- data.frame(c(seq(15, 45, 5), 15), c(seq(19, 49, 5), 49)) -->
+<!-- df <- data.frame(Age.Groups = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+<!-- ``` -->
+<!-- ```{r ever heard about cc function} -->
+<!-- heardofcc <- function(df, age1, age2){ -->
+<!--   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(heard_of_cc)) -->
+
+<!--   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) -->
+<!--   m <- svyciprop(~heard_of_cc, design = design) -->
+<!--   ci <- confint(m) -->
+
+<!--   return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) -->
+<!-- } -->
+<!-- ``` -->
+<!-- ```{r ever heard of cc Benin} -->
+<!-- heardofcc_dhs_bn <- df_age_fig(age.groups, bndhs, heardofcc, df) -->
+<!-- heardofcc_dhs_bn2 <- df_age_xl(age.groups, bndhs, heardofcc, df) -->
+<!-- ``` -->
+<!-- ```{r ever heard of cc Cote dIvoire} -->
+<!-- heardofcc_dhs_ci <- df_age_fig(age.groups, cidhs, heardofcc, df) -->
+<!-- heardofcc_dhs_ci2 <- df_age_xl(age.groups, cidhs, heardofcc, df) -->
+<!-- ``` -->
+<!-- ```{r ever heard of cc Namibia} -->
+<!-- heardofcc_dhs_nm <- df_age_fig(age.groups, nmdhs, heardofcc, df) -->
+<!-- heardofcc_dhs_nm2 <- df_age_xl(age.groups, nmdhs, heardofcc, df) -->
+<!-- ``` -->
+<!-- ```{r ever heard of cc Tanzania} -->
+<!-- heardofcc_dhs_tz <- df_age_fig(age.groups, tzdhs, heardofcc, df) -->
+<!-- heardofcc_dhs_tz2 <- df_age_xl(age.groups, tzdhs, heardofcc, df) -->
+<!-- ``` -->
+<!-- ```{r ever heard of cc Zimbabwe} -->
+<!-- heardofcc_dhs_zw <- df_age_fig(age.groups, zwdhs, heardofcc, df) -->
+<!-- heardofcc_dhs_zw2 <- df_age_xl(age.groups, zwdhs, heardofcc, df) -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- heardofcc_dhs_bn$Country <- "Benin" -->
+<!-- heardofcc_dhs_ci$Country <- "Cote d'Ivoire" -->
+<!-- heardofcc_dhs_nm$Country <- "Namibia" -->
+<!-- heardofcc_dhs_tz$Country <- "Tanzania" -->
+<!-- heardofcc_dhs_zw$Country <- "Zimbabwe" -->
+
+<!-- heardofcc_dhs_all <- rbind(heardofcc_dhs_bn, -->
+<!--                        heardofcc_dhs_ci, -->
+<!--                        heardofcc_dhs_nm, -->
+<!--                        heardofcc_dhs_tz, -->
+<!--                        heardofcc_dhs_zw) -->
+
+<!-- heardofcc_dhs_all$Age.Groups <- factor(heardofcc_dhs_all$Age.Groups, levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+
+<!-- ggplot(heardofcc_dhs_all, aes(x = Age.Groups, y = Mean, fill = Country)) + -->
+<!--   geom_bar(stat = "identity") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5) + -->
+<!--   ggtitle("DHS: Proportion ever heard of cervical cancer") + -->
+<!--   ylab("Proportion") + -->
+<!--   ylim(0, 1) +  -->
+<!--   facet_wrap(~Country) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) -->
+
+<!-- ``` -->
+
+<!-- ## Ever CC tested/had pap smear -->
+<!-- <!-- will code ever cc tested and ever had pap smear as different variables for now --> -->
+<!-- ```{r} -->
+<!-- age.groups <- data.frame(c(seq(15, 45, 5), 15), c(seq(19, 49, 5), 49)) -->
+<!-- df <- data.frame(Age.Groups = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+<!-- ``` -->
+<!-- ```{r ever tested function} -->
+<!-- evercctested <- function(df, age1, age2){ -->
+<!--   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested)) -->
+
+<!--   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) -->
+<!--   m <- svyciprop(~ever_cc_tested, design = design) -->
+<!--   ci <- confint(m) -->
+
+<!--   return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) -->
+<!-- } -->
+
+<!-- everhadpapsmear <- function(df, age1, age2){ -->
+<!--   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear)) -->
+
+<!--   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) -->
+<!--   m <- svyciprop(~ever_had_pap_smear, design = design) -->
+<!--   ci <- confint(m) -->
+
+<!--   return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) -->
+<!-- } -->
+<!-- ``` -->
+<!-- ```{r ever tested Benin} -->
+<!-- evercctested_dhs_bn <- df_age_fig(age.groups, bndhs, evercctested, df) -->
+<!-- evercctested_dhs_bn2 <- df_age_xl(age.groups, bndhs, evercctested, df) -->
+<!-- ``` -->
+<!-- ```{r ever tested Cote dIvoire} -->
+<!-- evercctested_dhs_ci <- df_age_fig(age.groups, cidhs, evercctested, df) -->
+<!-- evercctested_dhs_ci2 <- df_age_xl(age.groups, cidhs, evercctested, df) -->
+
+<!-- #HIV Status -->
+<!-- evercctested_dhs_ci_hivp <- df_age_fig(age.groups, hivp_cidhs, evercctested, df) -->
+<!-- evercctested_dhs_ci_hivp2 <- df_age_xl(age.groups, hivp_cidhs, evercctested, df) -->
+
+<!-- evercctested_dhs_ci_hivn <- df_age_fig(age.groups, hivn_cidhs, evercctested, df) -->
+<!-- evercctested_dhs_ci_hivn2 <- df_age_xl(age.groups, hivn_cidhs, evercctested, df) -->
+<!-- ``` -->
+<!-- ```{r ever tested Kenya - pap + overall} -->
+<!-- evercctested_dhs_ke <- df_age_fig(age.groups, kedhs, evercctested, df) -->
+<!-- evercctested_dhs_ke2 <- df_age_xl(age.groups, kedhs, evercctested, df) -->
+
+<!-- everhadpapsmear_dhs_ke <- df_age_fig(age.groups, kedhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_ke2 <- df_age_xl(age.groups, kedhs, everhadpapsmear, df) -->
+<!-- ``` -->
+<!-- ```{r ever tested-pap Lesotho 2009} -->
+<!-- everhadpapsmear_dhs_ls9 <- df_age_fig(age.groups, ls9dhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_ls92 <- df_age_xl(age.groups, ls9dhs, everhadpapsmear, df) -->
+
+<!-- #HIV Status -->
+<!-- everhadpapsmear_dhs_ls9_hivp <- df_age_fig(age.groups, hivp_ls9dhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_ls9_hivp2 <- df_age_xl(age.groups, hivp_ls9dhs, everhadpapsmear, df) -->
+
+<!-- everhadpapsmear_dhs_ls9_hivn <- df_age_fig(age.groups, hivn_ls9dhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_ls9_hivn2 <- df_age_xl(age.groups, hivn_ls9dhs, everhadpapsmear, df) -->
+<!-- ``` -->
+<!-- ```{r ever tested-pap Lesotho 2014} -->
+<!-- everhadpapsmear_dhs_ls14 <- df_age_fig(age.groups, ls14dhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_ls142 <- df_age_xl(age.groups, ls14dhs, everhadpapsmear, df) -->
+
+<!-- #HIV Status -->
+<!-- everhadpapsmear_dhs_ls14_hivp <- df_age_fig(age.groups, hivp_ls14dhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_ls14_hivp2 <- df_age_xl(age.groups, hivp_ls14dhs, everhadpapsmear, df) -->
+
+<!-- everhadpapsmear_dhs_ls14_hivn <- df_age_fig(age.groups, hivn_ls14dhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_ls14_hivn2 <- df_age_xl(age.groups, hivn_ls14dhs, everhadpapsmear, df) -->
+<!-- ``` -->
+<!-- ```{r ever tested Namibia-pap+overall} -->
+<!-- everhadpapsmear_dhs_nm <- df_age_fig(age.groups, nmdhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_nm2 <- df_age_xl(age.groups, nmdhs, everhadpapsmear, df) -->
+
+<!-- #HIV Status -->
+<!-- everhadpapsmear_dhs_nm_hivp <- df_age_fig(age.groups, hivp_nmdhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_nm_hivp2 <- df_age_xl(age.groups, hivp_nmdhs, everhadpapsmear, df) -->
+
+<!-- everhadpapsmear_dhs_nm_hivn <- df_age_fig(age.groups, hivn_nmdhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_nm_hivn2 <- df_age_xl(age.groups, hivn_nmdhs, everhadpapsmear, df) -->
+
+<!-- evercctested_dhs_nm <- df_age_fig(age.groups, nmdhs, evercctested, df) -->
+<!-- evercctested_dhs_nm2 <- df_age_xl(age.groups, nmdhs, evercctested, df) -->
+
+<!-- #HIV Status -->
+<!-- evercctested_dhs_nm_hivp <- df_age_fig(age.groups, hivp_nmdhs, evercctested, df) -->
+<!-- evercctested_dhs_nm_hivp2 <- df_age_xl(age.groups, hivp_nmdhs, evercctested, df) -->
+
+<!-- evercctested_dhs_nm_hivn <- df_age_fig(age.groups, hivn_nmdhs, evercctested, df) -->
+<!-- evercctested_dhs_nm_hivn2 <- df_age_xl(age.groups, hivn_nmdhs, evercctested, df) -->
+<!-- ``` -->
+<!-- ```{r ever tested South Africa-pap} -->
+<!-- everhadpapsmear_dhs_sa <- df_age_fig(age.groups, sadhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_sa2 <- df_age_xl(age.groups, sadhs, everhadpapsmear, df) -->
+
+<!-- #HIV Status -->
+<!-- everhadpapsmear_dhs_sa_hivp <- df_age_fig(age.groups, hivp_sadhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_sa_hivp2 <- df_age_xl(age.groups, hivp_sadhs, everhadpapsmear, df) -->
+
+<!-- everhadpapsmear_dhs_sa_hivn <- df_age_fig(age.groups, hivn_sadhs, everhadpapsmear, df) -->
+<!-- everhadpapsmear_dhs_sa_hivn2 <- df_age_xl(age.groups, hivn_sadhs, everhadpapsmear, df) -->
+<!-- ``` -->
+<!-- ```{r ever tested Zimbabwe} -->
+<!-- evercctested_dhs_zw <- df_age_fig(age.groups, zwdhs, evercctested, df) -->
+<!-- evercctested_dhs_zw2 <- df_age_xl(age.groups, zwdhs, evercctested, df) -->
+
+<!-- # HIV Status -->
+<!-- evercctested_dhs_zw_hivp <- df_age_fig(age.groups, hivp_zwdhs, evercctested, df) -->
+<!-- evercctested_dhs_zw_hivp2 <- df_age_xl(age.groups, hivp_zwdhs, evercctested, df) -->
+
+<!-- evercctested_dhs_zw_hivn <- df_age_fig(age.groups, hivn_zwdhs, evercctested, df) -->
+<!-- evercctested_dhs_zw_hivn2 <- df_age_xl(age.groups, hivn_zwdhs, evercctested, df) -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- evercctested_dhs_bn$Country = "Benin" -->
+<!-- evercctested_dhs_ci$Country = "Cote d'Ivoire" -->
+<!-- evercctested_dhs_ke$Country = "Kenya" -->
+<!-- evercctested_dhs_nm$Country = "Namibia" -->
+<!-- evercctested_dhs_zw$Country = "Zimbabwe" -->
+<!-- everhadpapsmear_dhs_ke$Country = "Kenya" -->
+<!-- everhadpapsmear_dhs_ls9$Country = "Lesotho" -->
+<!-- everhadpapsmear_dhs_ls14$Country = "Lesotho" -->
+<!-- everhadpapsmear_dhs_nm$Country = "Namibia" -->
+<!-- everhadpapsmear_dhs_sa$Country = "South Africa" -->
+
+<!-- evercctested_dhs_ci_hivp$Country = "Cote d'Ivoire" -->
+<!-- evercctested_dhs_nm_hivp$Country = "Namibia" -->
+<!-- evercctested_dhs_zw_hivp$Country = "Zimbabwe" -->
+<!-- everhadpapsmear_dhs_ls9_hivp$Country = "Lesotho" -->
+<!-- everhadpapsmear_dhs_ls14_hivp$Country = "Lesotho" -->
+<!-- everhadpapsmear_dhs_nm_hivp$Country = "Namibia" -->
+<!-- everhadpapsmear_dhs_sa_hivp$Country = "South Africa" -->
+
+<!-- evercctested_dhs_ci_hivn$Country = "Cote d'Ivoire" -->
+<!-- evercctested_dhs_nm_hivn$Country = "Namibia" -->
+<!-- evercctested_dhs_zw_hivn$Country = "Zimbabwe" -->
+<!-- everhadpapsmear_dhs_ls9_hivn$Country = "Lesotho" -->
+<!-- everhadpapsmear_dhs_ls14_hivn$Country = "Lesotho" -->
+<!-- everhadpapsmear_dhs_nm_hivn$Country = "Namibia" -->
+<!-- everhadpapsmear_dhs_sa_hivn$Country = "South Africa" -->
+
+<!-- evercctested_dhs_bn$Year = "2017.5" -->
+<!-- evercctested_dhs_ci$Year = "2011.5" -->
+<!-- evercctested_dhs_ke$Year = "2014" -->
+<!-- evercctested_dhs_nm$Year = "2013" -->
+<!-- evercctested_dhs_zw$Year = "2015" -->
+<!-- everhadpapsmear_dhs_ke$Year = "2014" -->
+<!-- everhadpapsmear_dhs_ls9$Year = "2009" -->
+<!-- everhadpapsmear_dhs_ls14$Year = "2014" -->
+<!-- everhadpapsmear_dhs_nm$Year = "2013" -->
+<!-- everhadpapsmear_dhs_sa$Year = "2016" -->
+
+<!-- evercctested_dhs_ci_hivp$Year = "2011.5" -->
+<!-- evercctested_dhs_nm_hivp$Year = "2013" -->
+<!-- evercctested_dhs_zw_hivp$Year = "2015" -->
+<!-- everhadpapsmear_dhs_ls9_hivp$Year = "2009" -->
+<!-- everhadpapsmear_dhs_ls14_hivp$Year = "2014" -->
+<!-- everhadpapsmear_dhs_nm_hivp$Year = "2013" -->
+<!-- everhadpapsmear_dhs_sa_hivp$Year = "2016" -->
+
+<!-- evercctested_dhs_ci_hivn$Year = "2011.5" -->
+<!-- evercctested_dhs_nm_hivn$Year = "2013" -->
+<!-- evercctested_dhs_zw_hivn$Year = "2015" -->
+<!-- everhadpapsmear_dhs_ls9_hivn$Year = "2009" -->
+<!-- everhadpapsmear_dhs_ls14_hivn$Year = "2014" -->
+<!-- everhadpapsmear_dhs_nm_hivn$Year = "2013" -->
+<!-- everhadpapsmear_dhs_sa_hivn$Year = "2016" -->
+
+<!-- evercctested_dhs_bn$Status = "Either HIV+ or HIV-" -->
+<!-- evercctested_dhs_ci$Status = "Either HIV+ or HIV-" -->
+<!-- evercctested_dhs_ke$Status = "Either HIV+ or HIV-" -->
+<!-- evercctested_dhs_nm$Status = "Either HIV+ or HIV-" -->
+<!-- evercctested_dhs_zw$Status = "Either HIV+ or HIV-" -->
+<!-- everhadpapsmear_dhs_ke$Status = "Either HIV+ or HIV-" -->
+<!-- everhadpapsmear_dhs_ls9$Status = "Either HIV+ or HIV-" -->
+<!-- everhadpapsmear_dhs_ls14$Status = "Either HIV+ or HIV-" -->
+<!-- everhadpapsmear_dhs_nm$Status = "Either HIV+ or HIV-" -->
+<!-- everhadpapsmear_dhs_sa$Status = "Either HIV+ or HIV-" -->
+
+<!-- evercctested_dhs_ci_hivp$Status = "HIV+" -->
+<!-- evercctested_dhs_nm_hivp$Status = "HIV+" -->
+<!-- evercctested_dhs_zw_hivp$Status = "HIV+" -->
+<!-- everhadpapsmear_dhs_ls9_hivp$Status = "HIV+" -->
+<!-- everhadpapsmear_dhs_ls14_hivp$Status = "HIV+" -->
+<!-- everhadpapsmear_dhs_nm_hivp$Status = "HIV+" -->
+<!-- everhadpapsmear_dhs_sa_hivp$Status = "HIV+" -->
+
+<!-- evercctested_dhs_ci_hivn$Status = "HIV-" -->
+<!-- evercctested_dhs_nm_hivn$Status = "HIV-" -->
+<!-- evercctested_dhs_zw_hivn$Status = "HIV-" -->
+<!-- everhadpapsmear_dhs_ls9_hivn$Status = "HIV-" -->
+<!-- everhadpapsmear_dhs_ls14_hivn$Status = "HIV-" -->
+<!-- everhadpapsmear_dhs_nm_hivn$Status = "HIV-" -->
+<!-- everhadpapsmear_dhs_sa_hivn$Status = "HIV-" -->
+
+<!-- #evertested -->
+<!-- evertested_dhs_all <- rbind(evercctested_dhs_bn, -->
+<!--                         evercctested_dhs_ci, -->
+<!--                         evercctested_dhs_ke, -->
+<!--                         evercctested_dhs_nm, -->
+<!--                         evercctested_dhs_zw, -->
+<!--                         everhadpapsmear_dhs_ls9, -->
+<!--                         everhadpapsmear_dhs_ls14, -->
+<!--                         everhadpapsmear_dhs_sa) -->
+<!-- #evercctested -->
+<!-- evercctested_dhs_all <- rbind(evercctested_dhs_bn, -->
+<!--                         evercctested_dhs_ci, -->
+<!--                         evercctested_dhs_ke, -->
+<!--                         evercctested_dhs_nm, -->
+<!--                         evercctested_dhs_zw) -->
+<!-- #everpapsmear -->
+<!-- everhadpapsmear_dhs_all <- rbind(everhadpapsmear_dhs_nm, -->
+<!--                                  everhadpapsmear_dhs_ke, -->
+<!--                                  everhadpapsmear_dhs_ls14, -->
+<!--                                  everhadpapsmear_dhs_nm, -->
+<!--                                  everhadpapsmear_dhs_sa) -->
+
+<!-- #dfs with HIV -->
+<!-- evertested_dhs_hiv <- rbind(evercctested_dhs_bn, -->
+<!--                         evercctested_dhs_ci, -->
+<!--                         evercctested_dhs_nm, -->
+<!--                         evercctested_dhs_zw, -->
+<!--                         everhadpapsmear_dhs_ls9, -->
+<!--                         everhadpapsmear_dhs_ls14, -->
+<!--                         everhadpapsmear_dhs_sa, -->
+<!--                         evercctested_dhs_ci_hivp, -->
+<!--                         evercctested_dhs_nm_hivp, -->
+<!--                         evercctested_dhs_zw_hivp, -->
+<!--                         everhadpapsmear_dhs_ls9_hivp, -->
+<!--                         everhadpapsmear_dhs_ls14_hivp, -->
+<!--                         everhadpapsmear_dhs_nm_hivp, -->
+<!--                         everhadpapsmear_dhs_sa_hivp, -->
+<!--                         evercctested_dhs_ci_hivn, -->
+<!--                         evercctested_dhs_nm_hivn, -->
+<!--                         evercctested_dhs_zw_hivn, -->
+<!--                         everhadpapsmear_dhs_ls9_hivn, -->
+<!--                         everhadpapsmear_dhs_ls14_hivn, -->
+<!--                         everhadpapsmear_dhs_nm_hivn, -->
+<!--                         everhadpapsmear_dhs_sa_hivn) -->
+
+<!-- evercctested_dhs_hiv <- rbind(evercctested_dhs_ci, -->
+<!--                         evercctested_dhs_nm, -->
+<!--                         evercctested_dhs_zw, -->
+<!--                         evercctested_dhs_ci_hivp, -->
+<!--                         evercctested_dhs_nm_hivp, -->
+<!--                         evercctested_dhs_zw_hivp, -->
+<!--                         evercctested_dhs_ci_hivn, -->
+<!--                         evercctested_dhs_nm_hivn, -->
+<!--                         evercctested_dhs_zw_hivn) -->
+
+<!-- everhadpapsmear_dhs_hiv <- rbind(everhadpapsmear_dhs_ls9, -->
+<!--                         everhadpapsmear_dhs_ls14, -->
+<!--                         everhadpapsmear_dhs_nm, -->
+<!--                         everhadpapsmear_dhs_sa, -->
+<!--                         everhadpapsmear_dhs_ls9_hivp, -->
+<!--                         everhadpapsmear_dhs_ls14_hivp, -->
+<!--                         everhadpapsmear_dhs_nm_hivp, -->
+<!--                         everhadpapsmear_dhs_sa_hivp, -->
+<!--                         everhadpapsmear_dhs_ls9_hivn, -->
+<!--                         everhadpapsmear_dhs_ls14_hivn, -->
+<!--                         everhadpapsmear_dhs_nm_hivn, -->
+<!--                         everhadpapsmear_dhs_sa_hivn) -->
+
+<!-- evertested_dhs_all$Age.Groups <- factor(evertested_dhs_all$Age.Groups,  -->
+<!--                                         levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+
+<!-- evercctested_dhs_all$Age.Groups <- factor(evercctested_dhs_all$Age.Groups,  -->
+<!--                                         levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+
+<!-- everhadpapsmear_dhs_all$Age.Groups <- factor(everhadpapsmear_dhs_all$Age.Groups,  -->
+<!--                                         levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+
+<!-- evertested_dhs_hiv$Age.Groups <- factor(evertested_dhs_hiv$Age.Groups,  -->
+<!--                                         levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+
+<!-- evercctested_dhs_hiv$Age.Groups <- factor(evercctested_dhs_hiv$Age.Groups,  -->
+<!--                                         levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+
+<!-- everhadpapsmear_dhs_hiv$Age.Groups <- factor(everhadpapsmear_dhs_hiv$Age.Groups,  -->
+<!--                                         levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- evertested_dhs_all$Year <- as.numeric(evertested_dhs_all$Year) -->
+<!-- ggplot(evertested_dhs_all[evertested_dhs_all$Age.Groups == "15-49",], aes(x = Year, y = Mean, colour = Country)) + -->
+<!--   geom_point() + -->
+<!--   #geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5) + -->
+<!--   ggtitle("DHS: Proportion ever tested for cervical cancer (15-49)\n(includes countries that asked about pap smear only)") +  -->
+<!--   ylim(0, 1) + -->
+<!--   ylab("Proportion") +  -->
+<!--   facet_wrap(~Country) -->
+
+<!-- ggplot(evertested_dhs_all, aes(x = Year, y = Mean, colour = Country)) + -->
+<!--   geom_point() + -->
+<!--   #geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5) + -->
+<!--   ggtitle("DHS: Proportion ever tested for cervical cancer\n(includes countries that asked about pap smear only)") +  -->
+<!--   ylim(0, 1) + -->
+<!--   ylab("Proportion") + -->
+<!--   facet_wrap(~Age.Groups) -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- ggplot(evercctested_dhs_hiv, aes(x = Age.Groups, y = Mean, fill = Status)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("DHS: Proportion ever tested for cervical cancer by HIV Status") +  -->
+<!--   ylim(0, 1) + -->
+<!--   ylab("Proportion") + -->
+<!--   facet_wrap(~Country, nrow = 3) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) -->
+
+<!-- ggplot(everhadpapsmear_dhs_hiv[everhadpapsmear_dhs_hiv$Country != "Lesotho", ], aes(x = Age.Groups, y = Mean, fill = Status)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("DHS: Proportion ever had a pap smear by HIV Status") +  -->
+<!--   ylim(0, 1) + -->
+<!--   ylab("Proportion") + -->
+<!--   facet_wrap(~Country) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) -->
+
+<!-- ggplot(everhadpapsmear_dhs_hiv[everhadpapsmear_dhs_hiv$Country == "Lesotho", ], aes(x = Age.Groups, y = Mean, fill = Status)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("DHS: Proportion ever had a pap smear by HIV Status") +  -->
+<!--   ylim(0, 1) + -->
+<!--   ylab("Proportion") + -->
+<!--   facet_grid(.~Year, labeller = labeller(Year = c("2009" = "Lesotho 2009", "2014" = "Lesotho 2014"))) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) -->
+<!-- ``` -->
+
+<!-- ## Last CC test/pap smear -->
+<!-- ```{r} -->
+<!-- age.groups <- data.frame(c(seq(15, 45, 5), 15), c(seq(19, 49, 5), 49)) -->
+<!-- time_length <- c(1:3, 8) -->
+<!-- df1 <- data.frame(Age.Groups=rep(c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49"), 4), -->
+<!--                   Time.Length = c(rep("Within the last year", 8),  -->
+<!--                                   rep("1-3 years", 8), -->
+<!--                                   rep("4+ years", 8),  -->
+<!--                                   rep("Don't know", 8))) -->
+<!-- ``` -->
+<!-- ```{r last test function} -->
+<!-- lastcctest <-  function(df, age1, age2, time_length){ -->
+<!--   sub_df <- filter(df, age >= age1 & age <= age2) -->
+<!--   sub_df <- filter(sub_df, !is.na(last_cc_test)) -->
+
+<!--   if(nrow(sub_df) <= 1){ -->
+<!--     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA)) -->
+<!--   }else{ -->
+<!--   sub_df$a <- 0 -->
+<!--   sub_df$a[sub_df$last_cc_test == time_length] = 1 -->
+
+<!--   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) -->
+<!--   m <- svyciprop(~a, design = design) -->
+<!--   ci <- confint(m) -->
+
+<!--   return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))  -->
+<!--   } -->
+<!-- } -->
+
+<!-- lastpapsmear <-  function(df, age1, age2, time_length){ -->
+<!--   sub_df <- filter(df, age >= age1 & age <= age2) -->
+<!--   sub_df <- filter(sub_df, !is.na(last_pap_smear)) -->
+
+<!--   if(nrow(sub_df) <= 1){ -->
+<!--     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA)) -->
+<!--   }else{ -->
+<!--   sub_df$a <- 0 -->
+<!--   sub_df$a[sub_df$last_pap_smear == time_length] = 1 -->
+
+<!--   design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) -->
+<!--   m <- svyciprop(~a, design = design) -->
+<!--   ci <- confint(m) -->
+
+<!--   return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))  -->
+<!--   } -->
+<!-- } -->
+<!-- # table(bndhs$last_cc_test) -->
+<!-- # table(zwdhs$last_cc_test) -->
+<!-- # table(ls9dhs$last_pap_smear) -->
+<!-- # table(ls14dhs$last_pap_smear) -->
+<!-- # table(sadhs$last_pap_smear) -->
+<!-- ``` -->
+<!-- ```{r last cc test benin} -->
+<!-- bndhs1 <- bndhs -->
+<!-- bndhs1$last_cc_test <- NA -->
+<!-- for(i in 1:nrow(bndhs)){ -->
+<!--   if(!is.na(bndhs$last_cc_test[i])){ -->
+<!--     if(bndhs$last_cc_test[i] <= 0){ -->
+<!--       bndhs1$last_cc_test[i] <- 1 -->
+<!--     } else if(bndhs$last_cc_test[i] >= 1 & bndhs$last_cc_test[i] <= 3){ -->
+<!--       bndhs1$last_cc_test[i] <- 2 -->
+<!--     } else if(bndhs$last_cc_test[i] >= 4 & bndhs$last_cc_test[i] != 98){ -->
+<!--       bndhs1$last_cc_test[i] <- 3 -->
+<!--     } else if(bndhs$last_cc_test[i] == 98){ -->
+<!--       bndhs1$last_cc_test[i] <- 8 -->
+<!--     } -->
+<!--   } -->
+<!-- } -->
+
+<!-- lastcctest_dhs_bn <- df_2_fig(age.groups, time_length, bndhs1, lastcctest, df1) -->
+<!-- lastcctest_dhs_bn2 <- df_2_xl(age.groups, time_length, bndhs1, lastcctest, df1) -->
+<!-- ``` -->
+<!-- ```{r last pap smear lesotho 2009} -->
+<!-- lastpapsmear_dhs_ls9 <- df_2_fig(age.groups, time_length, ls9dhs, lastpapsmear, df1) -->
+<!-- lastpapsmear_dhs_ls92 <- df_2_xl(age.groups, time_length, ls9dhs, lastpapsmear, df1) -->
+<!-- ``` -->
+<!-- ```{r last pap smear lesotho 2014} -->
+<!-- lastpapsmear_dhs_ls14 <- df_2_fig(age.groups, time_length, ls14dhs, lastpapsmear, df1) -->
+<!-- lastpapsmear_dhs_ls142 <- df_2_xl(age.groups, time_length, ls14dhs, lastpapsmear, df1) -->
+<!-- ``` -->
+<!-- ```{r last pap smear south africa} -->
+<!-- time_length2 <- c(1:4, 8) -->
+
+<!-- df2 <- data.frame(Age.Groups=rep(c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49"), 5), -->
+<!--                   Time.Length = c(rep("Within the last 3 years", 8),  -->
+<!--                                   rep("4-5 years", 8), -->
+<!--                                   rep("6-10 years", 8), -->
+<!--                                   rep("10+ years", 8),  -->
+<!--                                   rep("Don't know", 8))) -->
+<!-- lastpapsmear_dhs_sa <- df_2_fig(age.groups, time_length2, sadhs, lastpapsmear, df2) -->
+<!-- lastpapsmear_dhs_sa2 <- df_2_xl(age.groups, time_length2, sadhs, lastpapsmear, df2) -->
+<!-- ``` -->
+<!-- ```{r last cc test zimbabwe} -->
+<!-- zwdhs1 <- zwdhs -->
+<!-- zwdhs1$last_cc_test <- NA -->
+<!-- # creating new column to categorize last time pap smear to be more aligned with other surveys. In this method I consider those who've had hysterectomies, never menstruated and before last birth (whatever that means lol) as NA -->
+<!-- for(i in 1:nrow(zwdhs)){ -->
+<!--   if(!is.na(zwdhs$last_cc_test[i])){ -->
+<!--     if(zwdhs$last_cc_test[i] < 401){ -->
+<!--       zwdhs1$last_cc_test[i] <- 1 -->
+<!--     } else if(zwdhs$last_cc_test[i] >= 401 & zwdhs$last_cc_test[i] <= 403){ -->
+<!--       zwdhs1$last_cc_test[i] <- 2 -->
+<!--     } else if(zwdhs$last_cc_test[i] >= 404 & zwdhs$last_cc_test[i] <= 500){ -->
+<!--       zwdhs1$last_cc_test[i] <- 3 -->
+<!--     } else if(zwdhs$last_cc_test[i] == 998){ -->
+<!--       zwdhs1$last_cc_test[i] <- 8 -->
+<!--     } -->
+<!--   } -->
+<!-- } -->
+
+<!-- lastcctest_dhs_zw <- df_2_fig(age.groups, time_length, zwdhs1, lastcctest, df1) -->
+<!-- lastcctest_dhs_zw2 <- df_2_xl(age.groups, time_length, zwdhs1, lastcctest, df1) -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- lastcctest_dhs_bn$Country <- "Benin" -->
+<!-- lastcctest_dhs_zw$Country <- "Zimbabwe" -->
+<!-- lastpapsmear_dhs_ls9$Country <- "Lesotho 2009" -->
+<!-- lastpapsmear_dhs_ls14$Country <- "Lesotho 2014" -->
+<!-- lastpapsmear_dhs_sa$Country <- "South Africa" -->
+
+<!-- lasttest_dhs_overall <- rbind(lastcctest_dhs_bn, -->
+<!--                           lastcctest_dhs_zw, -->
+<!--                           lastpapsmear_dhs_ls9, -->
+<!--                           lastpapsmear_dhs_ls14) -->
+
+<!-- lastcctest_dhs_overall <- rbind(lastcctest_dhs_bn, -->
+<!--                             lastcctest_dhs_zw) -->
+
+<!-- lastpapsmear_dhs_ls <- rbind(lastpapsmear_dhs_ls9, -->
+<!--                             lastpapsmear_dhs_ls14) -->
+
+<!-- lasttest_dhs_overall$Time.Length <- factor(lasttest_dhs_overall$Time.Length, levels = c("Within the last year", "1-3 years", "4+ years", "Don't know")) -->
+<!-- lastcctest_dhs_overall$Time.Length <- factor(lastcctest_dhs_overall$Time.Length, levels = c("Within the last year", "1-3 years", "4+ years", "Don't know")) -->
+<!-- lastpapsmear_dhs_ls$Time.Length <- factor(lastpapsmear_dhs_ls$Time.Length, levels = c("Within the last year", "1-3 years", "4+ years", "Don't know")) -->
+<!-- lastpapsmear_dhs_sa$Time.Length <- factor(lastpapsmear_dhs_sa$Time.Length, levels = c("Within the last 3 years", "4-5 years", "6-10 years", "10+ years", "Don't know")) -->
+
+<!-- lasttest_dhs_overall$Age.Groups <- factor(lasttest_dhs_overall$Age.Groups, levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+<!-- lastcctest_dhs_overall$Age.Groups <- factor(lastcctest_dhs_overall$Age.Groups, levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+<!-- lastpapsmear_dhs_ls$Age.Groups <- factor(lastpapsmear_dhs_ls$Age.Groups, levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+<!-- lastpapsmear_dhs_sa$Age.Groups <- factor(lastpapsmear_dhs_sa$Age.Groups, levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "15-49")) -->
+<!-- ``` -->
+<!-- ```{r cc test plots} -->
+<!-- ggplot(lasttest_dhs_overall, aes(x = Country, y = Mean, fill = Age.Groups)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("Proportion last tested for cervical cancer \n(includes countries that asked about pap smear only)") + -->
+<!--   facet_wrap(~Time.Length) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) -->
+
+<!-- ggplot(lastcctest_dhs_overall, aes(x = Country, y = Mean, fill = Age.Groups)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("Proportion last tested for cervical cancer") + -->
+<!--   facet_wrap(~Time.Length) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) -->
+
+<!-- ggplot(lastpapsmear_dhs_ls, aes(x = Age.Groups, y = Mean, fill = Country)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("Proportion last had a pap smear - Lesotho") + -->
+<!--   facet_wrap(~Time.Length) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) -->
+
+<!-- ggplot(lastpapsmear_dhs_sa, aes(x = Age.Groups, y = Mean, fill = Time.Length)) + -->
+<!--   geom_bar(stat = "identity", position = "dodge") + -->
+<!--   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) + -->
+<!--   ggtitle("Proportion last had a pap smear - South Africa") + -->
+<!--   facet_wrap(~Age.Groups) + -->
+<!--   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) -->
+<!-- ``` -->
