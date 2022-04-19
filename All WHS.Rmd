@@ -1,0 +1,486 @@
+---
+title: "WHS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+load("Cleaned WHS")
+```
+
+```{r import + clean data}
+library(haven)
+library(dplyr)
+library(survey)
+library(ggplot2)
+library(reldist)
+source("df_functions.R")
+
+read_whs <- function(iso3, full_name){
+  abrvid <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/", full_name, "-ID.dta"))
+  abrv2 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/WHS-", full_name, "_F2.dta"))
+  #abrv4 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/WHS-", full_name, "_F4.dta"))
+  abrv5 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/WHS-", full_name, "_F5.dta"))
+  
+  abrv <- left_join(abrvid, abrv2)
+  #abrv <- left_join(abrv, abrv4)
+  abrv <- left_join(abrv, abrv5)
+  
+  abrvwhs <- select(abrv,
+                    c(psu = PSU,
+                      strata, 
+                      weight = pweight, #choosing this weight as its consistent through all surveys (psweight might be more appropriate though...)
+                      age = q1002,
+                      sex = q1001,
+                      urban_rural = q0104,
+                      #weekly_income = q0922,
+                      #monthly_income = q0923,
+                      #yearly_income = q0924,
+                      edu = q1009,
+                      marital_status = q1008,
+                      most_recent_condom_use = q6608,
+                      #cervical cancer questions
+                      last_pelvic_exam = q6300,
+                      last_pelvic_exam_pap = q6301))
+  
+  #Recode
+  
+  ##determinants
+  abrvwhs$sex[abrvwhs$sex == 2] <- 0 #men == 0 for now
+  abrvwhs$sex[abrvwhs$sex == 1] <- 2 #code females as 2 to match the other surveys
+  abrvwhs$sex[abrvwhs$sex == 0] <- 1 #code males to 1
+
+  #put all income values to yearly
+  # for(i in 1:nrow(abrvwhs)){
+  #   if(!is.na(abrvwhs$weekly_income[i])){
+  #     abrvwhs$yearly_income[i] = abrvwhs$weekly_income[i]*52 #getting yearly income by multiplying weekly income by 52
+  #   }
+  #   if(!is.na(abrvwhs$monthly_income[i])){
+  #     abrvwhs$yearly_income[i] = abrvwhs$monthly_income[i]*12 #getting yearly income by multiplying monthly income by 12
+  #   }
+  # }
+  # 
+  #recode urban/rual
+  abrvwhs$urban_rural[abrvwhs$urban_rural == 1 | abrvwhs$urban_rural == 2] <- 1
+  abrvwhs$urban_rural[abrvwhs$urban_rural == 3] <- 2
+  
+  #recode education
+  abrvwhs$edu[abrvwhs$edu == 1] <- 0 #no schooling
+  abrvwhs$edu[abrvwhs$edu == 2 | abrvwhs$edu == 3] <- 1 #primary education
+  abrvwhs$edu[abrvwhs$edu == 4 | abrvwhs$edu == 5] <- 2 #secondary education
+  abrvwhs$edu[abrvwhs$edu == 6 | abrvwhs$edu == 7] <- 3 #more than secondary schooling
+  
+  #recode marital_status
+  abrvwhs$marital_status[abrvwhs$marital_status == 1] <- 0
+  abrvwhs$marital_status[abrvwhs$marital_status == 2] <- 1
+  abrvwhs$marital_status[abrvwhs$marital_status == 3] <- 4 #will assume that those who report in a steady relationship but not married or those who are single have never been married
+  abrvwhs$marital_status[abrvwhs$marital_status == 5] <- 3
+  abrvwhs$marital_status[abrvwhs$marital_status == 6] <- 2
+  
+  #Recode condom use
+  abrvwhs$most_recent_condom_use[abrvwhs$most_recent_condom_use == 5] <- 0
+  abrvwhs$most_recent_condom_use[abrvwhs$most_recent_condom_use == 8] <- NA
+  
+  #create age groups variable
+  age.groups = data.frame(l_age = seq(15, 65, 5), u_age = c(seq(19, 64, 5), 1000))
+  A <- nrow(age.groups)
+  abrvwhs$age.group = NA
+  for(n in 1:nrow(abrvwhs)){
+    for(a in 1:A){
+      if(age.groups$l_age[a] <= abrvwhs$age[n] & age.groups$u_age[a] >= abrvwhs$age[n] & !is.na(abrvwhs$age[n])){
+      abrvwhs$age.group[n] <- a
+      }
+    }
+  }
+  abrvwhs$age.group <- factor(abrvwhs$age.group, labels = c("15-19", "20-24", "25-29", "30-34",
+                                                            "35-39", "40-44", "45-49", "50-54", 
+                                                            "55-59", "60-64", "65+"))
+  
+  abrvwhs$Year <- 2003
+  
+  abrvwhs <- filter(abrvwhs, sex == 2 & !is.na(weight))
+  
+  #creating wealth_quint variable from yearly_income
+  # wq <- wtd.quantile(abrvwhs$yearly_income, c(0.2, 0.4, 0.6, 0.8), weight = abrvwhs$weight)
+  # abrvwhs$wealth_quint <- NA
+  # abrvwhs$wealth_quint[abrvwhs$yearly_income <= wq[1]] <- 1
+  # abrvwhs$wealth_quint[abrvwhs$yearly_income >= wq[1] & abrvwhs$yearly_income <= wq[2]] <- 2
+  # abrvwhs$wealth_quint[abrvwhs$yearly_income >= wq[2] & abrvwhs$yearly_income <= wq[3]] <- 3
+  # abrvwhs$wealth_quint[abrvwhs$yearly_income >= wq[3] & abrvwhs$yearly_income <= wq[4]] <- 4
+  # abrvwhs$wealth_quint[abrvwhs$yearly_income >= wq[4]] <- 5
+  
+  ##cervical cancer questions
+  #changing no from 5 to 0
+  abrvwhs$last_pelvic_exam_pap[abrvwhs$last_pelvic_exam_pap == 5] <- 0
+  abrvwhs$last_pelvic_exam_pap[abrvwhs$last_pelvic_exam != 1] <- NA #remove values for this question if did not report pelvic exam in the past 3 years
+  abrvwhs$last_pelvic_exam_pap[is.na(abrvwhs$last_pelvic_exam)] <- NA #remove values for this question if preceding question (ever had pelvic exam) was NA 
+
+  #creating a new variable for pap smear in the past 3 years among everyone
+  abrvwhs$pap_smear_past_3y <- NA
+  abrvwhs$pap_smear_past_3y[!is.na(abrvwhs$last_pelvic_exam)] <- 0 #keeps the denominator to among all women who answered the pelvic exam question
+  for(i in 1:nrow(abrvwhs)){ #adds values from those who answered if they had a pap smear
+    if(!is.na(abrvwhs$last_pelvic_exam_pap[i])){
+      abrvwhs$pap_smear_past_3y[i] <- abrvwhs$last_pelvic_exam_pap[i] #this assumes that those who said no to a pap smear in their LAST pelvic exam did not have another pelvic exam within the past 3 years that was a pap smear
+    }
+  }
+  
+  return(abrvwhs)
+}
+
+bfwhs <- read_whs("BFA", "Burkina")
+chwhs <- read_whs("TCD", "Chad")
+ciwhs <- read_whs("CIV", "CotedIvoire")
+cmwhs <- read_whs("COM", "Comoros")
+cnwhs <- read_whs("COG", "Congo")
+ethwhs <- read_whs("ETH", "Ethiopia")
+ghwhs <- read_whs("GHA", "Ghana")
+knwhs <- read_whs("KEN", "Kenya")
+mawhs <- read_whs("MLI", "Mali")
+mlwhs <- read_whs("MWI", "Malawi")
+mrtwhs <- read_whs("MRT", "Mauritania")
+muswhs <- read_whs("MUS", "Mauritius")
+nmwhs <- read_whs("NAM", "Namibia")
+sawhs <- read_whs("ZAF", "SouthAfrica")
+snwhs <- read_whs("SEN", "Senegal")
+szwhs <- read_whs("SWZ", "Eswatini")
+zmwhs <- read_whs("ZMB", "Zambia")
+zwwhs <- read_whs("ZWE", "Zimbabwe")
+
+abrv = c("bf", "ch", "ci", "cm", "cn", "eth", 
+         "gh", "kn", "ma", "ml", "mrt", "mus", 
+         "nm", "sa", "sn", "sz", "zm", "zw")
+
+countries = c("Burkina Faso", "Chad", "Cote d'Ivoire", "Comoros", "Congo (Rep)", "Ethiopia", "Ghana", "Kenya", "Mali", "Malawi", "Mauritania", "Mauritius", "Namibia", "South Africa", "Senegal", "Eswatini", "Zambia", "Zimbabwe")
+
+whs <- list(bfwhs, chwhs, ciwhs, cmwhs, cnwhs, ethwhs, ghwhs, 
+               knwhs, mawhs, mlwhs, mrtwhs, muswhs, nmwhs, 
+               sawhs, snwhs, szwhs, zmwhs, zwwhs)
+
+whs_names <- c("bfwhs", "chwhs", "ciwhs", "cmwhs", "cnwhs", "ethwhs", "ghwhs", 
+               "knwhs", "mawhs", "mlwhs", "mrtwhs", "muswhs", "nmwhs", 
+               "sawhs", "snwhs", "szwhs", "zmwhs", "zwwhs")
+
+names(whs) <- countries
+
+#adding country and df variable
+for(i in 1:length(whs)){
+  whs[[i]]$Country <- countries[i]
+  whs[[i]]$df <- paste0(abrv[i], "whs")
+  #print(nrow(whs_list[[i]]))
+}
+
+##
+df <- data.frame(names = whs_names,
+                 total_women = NA,
+                 total_women_answered = NA,
+                 num_had_pap = NA)
+for(i in 1:length(whs)){
+  df[i,2] <- sum(table(whs[[i]]$sex))
+  df[i,3] <- sum(table(whs[[i]]$pap_smear_past_3y)) 
+  df[i,4] <- table(whs[[i]]$pap_smear_past_3y)[2]
+}
+iso3 <- "GHA"
+full_name <- "Ghana"
+abrvid <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/", full_name, "-ID.dta"))
+  abrv2 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/WHS-", full_name, "_F2.dta"))
+  #abrv4 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/WHS-", full_name, "_F4.dta"))
+  abrv5 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/WHS-", full_name, "_F5.dta"))
+  
+ ghwhs <- left_join(abrvid, abrv2)
+  #abrv <- left_join(abrv, abrv4)
+  ghwhs <- left_join(ghwhs, abrv5)
+  View(ghwhs)
+```
+```{r}
+#trying to extrapolate and add an ever_had_pap_smear variable
+age.groups <- data.frame(seq(30, 45, 5),
+                         seq(34, 49, 5))
+prop_pap_df <- data.frame(lower_age = age.groups[1],
+                       upper_age = age.groups[2],
+                       age.group = c("30-34", "35-39", "40-44", "45-49"),
+                       prop_pap = NA,
+                       ever_had_pelvic_exam = NA,
+                       num_ever_pap = NA,
+                       prop_pap_ever = NA,
+                       prop_pap_3y = NA)
+for(w in 1:length(whs)){
+  for(i in 1:nrow(age.groups)){
+    df <- filter(whs[[w]], age >= age.groups[i,1] & age <= age.groups[i,2])
+    prop_pap <- table(df$last_pelvic_exam_pap)[2]/table(df$last_pelvic_exam)[1]
+    ever_had_pelvic_exam <- sum(table(df$last_pelvic_exam)[1:3])
+    num_prop_ever <- prop_pap*ever_had_pelvic_exam
+    prop_pap_ever <- num_prop_ever/sum(table(df$last_pelvic_exam))
+    prop_pap_3y <- table(df$pap_smear_past_3y)[2]/sum(table(df$pap_smear_past_3y))
+    
+    prop_pap_df[i,4] <- prop_pap
+    prop_pap_df[i,5] <- ever_had_pelvic_exam
+    prop_pap_df[i,6] <- num_prop_ever
+    prop_pap_df[i,7] <- prop_pap_ever
+    prop_pap_df[i,8] <- prop_pap_3y
+  }
+  whs[[w]] <- left_join(whs[[w]], prop_pap_df, by = "age.group")
+}
+```
+```{r}
+iso3 <- "ZAF"
+full_name <- "SouthAfrica"
+abrvid <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/", full_name, "-ID.dta"))
+  abrv2 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/WHS-", full_name, "_F2.dta"))
+  abrv4 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/WHS-", full_name, "_F4.dta"))
+  abrv5 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", iso3, "/WHS-", full_name, "_F5.dta"))
+  abrv <- left_join(abrvid, abrv2) #PSU in abrvid is the same as tsu (q0102) 
+  abrv <- left_join(abrv, abrv4)
+  abrv <- left_join(abrv, abrv5)
+abrvwhs <- select(abrv5,
+                    c(age = q1002,
+                      sex = q1001,
+                      edu = q1009,
+                      marital_status = q1008,
+                      most_recent_condom_use = q6608,
+                      #cervical cancer questions
+                      last_pelvic_exam = q6300,
+                      last_pelvic_exam_pap = q6301))
+
+#Recode sex
+  abrvwhs$sex[abrvwhs$sex == 2] <- 0 #men == 0 for now
+  abrvwhs$sex[abrvwhs$sex == 1] <- 2 #code females as 2 to match the other surveys
+  abrvwhs$sex[abrvwhs$sex == 0] <- 1 #code males to 1
+
+  #changing no from 5 to 0
+  abrvwhs$last_pelvic_exam_pap[abrvwhs$last_pelvic_exam_pap == 5] <- 0
+  abrvwhs$last_pelvic_exam_pap[abrvwhs$last_pelvic_exam != 1] <- NA #remove values for this question if did not report pelvic exam in the past 3 years
+  abrvwhs$last_pelvic_exam_pap[is.na(abrvwhs$last_pelvic_exam)] <- NA #remove values for this question if preceding question (ever had pelvic exam) was NA 
+
+  #creating a new variable for pap smear in the past 3 years among everyone
+  abrvwhs$pap_smear_past_3y <- NA
+  abrvwhs$pap_smear_past_3y[!is.na(abrvwhs$last_pelvic_exam)] <- 0 #keeps the denominator to among all women who answered the pelvic exam question
+  for(i in 1:nrow(abrvwhs)){ #adds values from those who answered if they had a pap smear
+    if(!is.na(abrvwhs$last_pelvic_exam_pap[i])){
+      abrvwhs$pap_smear_past_3y[i] <- abrvwhs$last_pelvic_exam_pap[i]
+    }
+  }
+  
+  sum(table(abrvwhs$last_pelvic_exam))
+  
+  #abrvwhs <- filter(abrvwhs, sex == 2)
+  sum(table(abrvwhs$last_pelvic_exam))
+  table(abrvwhs$last_pelvic_exam)
+  sum(table(abrvwhs$last_pelvic_exam_pap))
+  table(abrvwhs$last_pelvic_exam_pap)
+  sum(table(abrvwhs$pap_smear_past_3y))
+  table(abrvwhs$pap_smear_past_3y)
+  
+  a <- filter(abrvwhs, age >= 25 & age <= 65)
+  sum(table(a$last_pelvic_exam))
+  table(a$last_pelvic_exam)
+  sum(table(a$last_pelvic_exam_pap))
+  table(a$last_pelvic_exam_pap)
+  sum(table(a$pap_smear_past_3y))
+  table(a$pap_smear_past_3y)
+```
+```{r missing data}
+df <- data.frame(iso3 = c("BFA", "TCD", "CIV", "COM", "COG", "ETH", "GHA", "KEN", "MLI", 
+                          "MWI", "MRT", "MUS", "NAM", "ZAF", "SEN", "SWZ", "ZMB", "ZWE"),
+                 full_name = c("Burkina", "Chad", "CotedIvoire", "Comoros", "Congo", "Ethiopia", "Ghana", "Kenya", "Mali", 
+                               "Malawi", "Mauritania", "Mauritius", "Namibia", "SouthAfrica", "Senegal", "Eswatini", "Zambia", "Zimbabwe"))
+whs_names <- c("bfwhs", "chwhs", "ciwhs", "cmwhs", "cnwhs", "ethwhs", "ghwhs", 
+               "knwhs", "mawhs", "mlwhs", "mrtwhs", "muswhs", "nmwhs", 
+               "sawhs", "snwhs", "szwhs", "zmwhs", "zwwhs")
+whs_list <- list(NA)
+for(w in 1:nrow(df)){
+  abrv5 <- read_dta(paste0("~/Documents/GitHub/HPV-HIV-Model/WHS/", df[w,1], "/WHS-", df[w,2], "_F5.dta"))
+  abrvwhs <- select(abrv5,
+                 sex = q1001, #male = 2; female = 1
+                 age = q1002,
+                 last_pelvic_exam = q6300,
+                 last_pelvic_exam_pap = q6301)
+  abrvwhs$last_pelvic_exam_pap[abrvwhs$last_pelvic_exam_pap == 5] <- 0
+  abrvwhs$last_pelvic_exam_pap[abrvwhs$last_pelvic_exam != 1] <- NA #remove values for this question if did not report pelvic exam in the past 3 years
+  abrvwhs$last_pelvic_exam_pap[is.na(abrvwhs$last_pelvic_exam)] <- NA #remove values for this question if preceding question (ever had pelvic exam) was NA 
+
+  #creating a new variable for pap smear in the past 3 years among everyone
+  abrvwhs$pap_smear_past_3y <- NA
+  abrvwhs$pap_smear_past_3y[!is.na(abrvwhs$last_pelvic_exam)] <- 0 #keeps the denominator to among all women who answered the pelvic exam question
+  for(i in 1:nrow(abrvwhs)){ #adds values from those who answered if they had a pap smear
+    if(!is.na(abrvwhs$last_pelvic_exam_pap[i])){
+      abrvwhs$pap_smear_past_3y[i] <- abrvwhs$last_pelvic_exam_pap[i]
+    }
+  }
+  age.groups = data.frame(l_age = seq(15, 70, 5), u_age = c(seq(19, 69, 5), 1000))
+  A <- nrow(age.groups)
+  for(n in 1:nrow(abrvwhs)){
+    for(a in 1:A){
+      if(!is.na(abrvwhs$age[n]) & age.groups$l_age[a] <= abrvwhs$age[n] & age.groups$u_age[a] >= abrvwhs$age[n]){
+        agegr <- paste0(age.groups$l_age[a], "-", age.groups$u_age[a])
+        abrvwhs$agegr[n] <- agegr
+      }
+    }
+  }
+  abrvwhs$df <- whs_names[w]
+  whs_list[[w]] <- abrvwhs
+}
+
+names(whs_list) <- whs_names
+
+dat_missing <- data.frame(Survey = NA,
+                 agegr = NA,
+                 elg_resp = NA,
+                 resp = NA,
+                 dk = NA,
+                 missing = NA)
+
+n=1
+for(i in 1:length(whs_list)){
+  for(a in 1:length(sort(unique(whs_list[[i]]$agegr)))){
+    gr <- sort(unique(whs_list[[i]]$agegr))[a]
+    df <- filter(whs_list[[i]], agegr == gr & sex == 1)
+    id <- names(whs_list)[i]
+    tbl <- table(df$pap_smear_past_3y)
+    df_tbl <- data.frame(tbl)
+    
+    elg_resp <- nrow(df)
+    resp <- sum(tbl)
+    missing <- elg_resp - resp
+    
+    print(id); print(tbl)
+    dat_missing[n, ] <- c(id, gr, elg_resp, resp, dk, missing)
+    n=n+1
+  }
+}
+
+```
+
+```{r last pelvic exam function}
+lastpelvicexam <- function(df, age1, age2, time_length){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(last_pelvic_exam) & !is.na(psu) & !is.na(strata))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    sub_df$a <- 0
+    sub_df$a[sub_df$last_pelvic_exam == time_length] = 1
+  
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #not sure if I should include strata
+    m <- svyciprop(~a, design = design)
+  
+    ci <- confint(m)
+  
+    return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) 
+  }
+}
+```
+```{r last pelvic exam burkina faso}
+age.groups = data.frame(c(18), c(69))
+time.length = c(1:3, 5, 8)
+
+df1 <- data.frame(Age.Groups=rep(c("18-69"), 5),
+                  Time.Length = c(rep("Within the last 3 years", 1), 
+                                  rep("4-5 years", 1),
+                                  rep("5+ years", 1),
+                                  rep("Never had exam", 1),
+                                  rep("Don't know", 1)))
+
+lastpelvicexam_whs_list <- list(NA)
+for(i in 1:length(whs)){
+  df <- df_2_fig(age.groups, time.length, whs[[i]], lastpelvicexam, df1)
+  lastpelvicexam_whs_list[[i]] <- df
+  
+  #name data frames - not working 
+  df_name <- paste0("lastpelvicexam_", abrv[i])
+  names(lastpelvicexam_whs_list)[i] <- df_name 
+}
+```
+
+```{r pap smear at last pelvic exam among those with pelvic exam in past 3y function}
+lastpelvicexampap <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(last_pelvic_exam_pap))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) # may need to add strata
+    m <- svyciprop(~last_pelvic_exam_pap, design = design)
+    ci <- confint(m)
+  
+    return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) 
+  }
+}
+```
+```{r pap smear at last pelvic exam burkina faso}
+age.groups = data.frame(c(15), c(49))
+df2 <- data.frame(Age.Groups = c("15-49"))
+
+lastpelvicexampap_whs_list <- list(NA)
+lastpelvicexampap_whs <- data.frame(Country = countries, Age.Group = NA)
+
+for(i in 1:length(whs)){
+  df <- df_age_fig(age.groups, whs[[i]], lastpelvicexampap, df2)
+  lastpelvicexampap_whs_list[[i]] <- df
+  lastpelvicexampap_whs[i, 2:5] <- df
+  
+  #name data frames - not working 
+  df_name <- paste0("lastpelvicexampap_", abrv[i])
+  names(lastpelvicexampap_whs_list)[i] <- df_name 
+}
+```
+
+```{r pap smear in the past 3 years among everyone function}
+papsmearpast3y <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+    m <- svyciprop(~pap_smear_past_3y, design = design)
+    ci <- confint(m)
+  
+    return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) 
+  }
+}
+```
+```{r pap smear in the past 3 years among everyone burkina faso}
+age.groups <- data.frame(c(18, seq(25, 65, 5), 18, 18, 18), c(seq(24, 64, 5), 112, 49, 69, 112))
+
+df3 <- data.frame(Age.Groups = c("18-24", "25-29", "30-34", "35-39", 
+                                "40-44", "45-49", "50-54", "55-59", 
+                                "60-64", "65-112", "18-49", "18-69", "18-112"))
+
+papsmearpast3y_whs_list <- list(NA)
+papsmearpast3y_whs <- data.frame(Country = NA, Age.Groups = NA)
+
+n = 1
+for(i in 1:length(whs)){
+  df <- df_age_fig(age.groups, whs[[i]], papsmearpast3y, df3)
+  papsmearpast3y_whs_list[[i]] <- df
+  papsmearpast3y_whs[c(n:(n+nrow(df3)-1)), 2:5] <- df
+  papsmearpast3y_whs[c(n:(n+nrow(df3)-1)), 1] <- countries[i]
+  
+  #name data frames - not working 
+  df_name <- paste0("papsmearpast3y_", abrv[i])
+  names(papsmearpast3y_whs_list)[i] <- df_name 
+  
+  n = n+nrow(df3)
+}
+
+papsmearpast3y_whs$Age.Groups <- factor(papsmearpast3y_whs$Age.Groups, levels = c("18-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65-112", "18-49", "18-69", "18-112"))
+```
+
+```{r plot}
+ggplot(papsmearpast3y_whs, aes(x = Age.Groups, y = Mean, fill = Country)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ylim(0,1) +
+  facet_wrap(~Country, nrow = 6) +
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) +
+  ggtitle("WHS: Proportion had a pap smear in the past 3 years among all women")
+```
+
+```{r save}
+save(bfwhs, bfwhs, chwhs, ciwhs, cmwhs, cnwhs, ethwhs, ghwhs, 
+     knwhs, mawhs, mlwhs, mrtwhs, muswhs, nmwhs, sawhs, snwhs, szwhs, zmwhs, zwwhs, 
+     file = "Cleaned WHS")
+```
