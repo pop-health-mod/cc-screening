@@ -1,0 +1,465 @@
+---
+title: "SABSSM"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import}
+library(dplyr)
+library(survey)
+library(tidyr)
+library(ggplot2)
+library(knitr)
+library(haven)
+library(reldist)
+source("df_functions.R")
+
+sabssm2012 <- read.csv("~/Documents/GitHub/HPV-HIV-Model/SABSSM/SABSSM2012_Adult.csv")
+```
+```{r 2012 clean}
+sabssm <- select(sabssm2012,
+                c(psu = ea,
+                  weight = ibreal12,
+                  age = Q1_1,
+                  sex = Q1_2,
+                  region = province,
+                  urban_rural = geotype,
+                  monthly_income = Q1_16, #gross monthly income
+                  edu = education,
+                  marital_status = Q1_7,
+                  most_recent_condom_freq = Q6_18_1,
+                  most_recent_condom_use = Q6_19_1, #excludes those who report never using condom
+                  sex_partners_past_year = Q6_2, 
+                  sex_partners_ever = Q5_4,
+                  #cervical cancer questions
+                  ever_had_pap_smear = Q8_13,
+                  last_pap_smear = Q8_14,
+                  #hiv questions
+                  hivstat,
+                  arv))
+
+sabssm$Year <- 2012
+sabssm$Country <- "South Africa"
+sabssm$df <- "sabssm"
+sabssm$strata <- paste0(sabssm$region, "-", sabssm$urban_rural)
+
+#recode
+##determinants
+#cleaning arv data
+sabssm$arv[sabssm$arv == 2] = 0
+
+#change coding of hivstat so hiv negative == 0 
+sabssm$hivstat[sabssm$hivstat == 2] <- 0
+
+#if never had sex change number of sex partners ever to 0 
+sabssm$sex_partners_ever[sabssm$ever_had_sex == 0] = 0
+
+#recode most_recent_condom_use
+sabssm$most_recent_condom_use[sabssm$most_recent_condom_use == 2] = 0
+sabssm$most_recent_condom_use[sabssm$most_recent_condom_freq == 4] = 0
+sabssm$most_recent_condom_use[sabssm$most_recent_condom_freq == 4] = 0
+
+#create wealth_quintile variable from monthly_income
+# wq <- wtd.quantile(sabssm$monthly_income, c(0.2, 0.4, 0.6, 0.8), weight = sabssm$weight)
+# sabssm$wealth_quint <- NA
+# sabssm$wealth_quint[sabssm$monthly_income <= wq[1]] <- 1
+# sabssm$wealth_quint[sabssm$monthly_income > wq[1] & sabssm$monthly_income <= wq[2]] <- 2
+# sabssm$wealth_quint[sabssm$monthly_income > wq[2] & sabssm$monthly_income <= wq[3]] <- 3
+# sabssm$wealth_quint[sabssm$monthly_income > wq[3] & sabssm$monthly_income <= wq[4]] <- 4
+# sabssm$wealth_quint[sabssm$monthly_income > wq[4]] <- 5
+
+#recode urban/rural
+sabssm$urban_rural[sabssm$urban_rural == 1 | sabssm$urban_rural == 2] <- 1
+sabssm$urban_rural[sabssm$urban_rural == 3 | sabssm$urban_rural == 4] <- 2
+
+#recode education
+sabssm$edu[sabssm$edu <= 6] <- 1 #primary education
+sabssm$edu[sabssm$edu >= 7 & sabssm$edu <= 12] <- 2 #secondary education
+sabssm$edu[sabssm$edu >= 13 & sabssm$edu <= 15] <- 3 #more than secondary education
+sabssm$edu[sabssm$edu == 99] <- 0 #no schooling
+sabssm$edu[sabssm$edu == 98] <- NA 
+
+#recode marital_status
+sabssm$marital_status[sabssm$marital_status == 2] <- 1
+sabssm$marital_status[sabssm$marital_status == 3] <- 2
+sabssm$marital_status[sabssm$marital_status == 4 | sabssm$marital_status == 5] <- 0 #will assume that those who report in a steady relationship but not married or those who are single have never been married
+sabssm$marital_status[sabssm$marital_status == 6] <- 4
+sabssm$marital_status[sabssm$marital_status == 7] <- 3
+sabssm$marital_status[sabssm$marital_status == 8] <- 1 #will assume civil union is the same as married
+sabssm$marital_status[sabssm$marital_status == 9] <- NA #will not have other category for now to harmonize with other surveys
+sabssm$marital_status[sabssm$marital_status == 99] <- NA #not sure what to do with this "multiple entries" category will keep this NA for now
+
+##cervical cancer questions
+#recode pap smear questions
+sabssm$ever_had_pap_smear[sabssm$ever_had_pap_smear == 2] = 0
+
+#create cc test past 3 year question among everyone
+sabssm$pap_smear_past_3y[sabssm$ever_had_pap_smear == 0] <- 0
+sabssm$pap_smear_past_3y[sabssm$ever_had_pap_smear == 1 & sabssm$last_pap_smear > 2] <- 0
+sabssm$pap_smear_past_3y[sabssm$ever_had_pap_smear == 1 & sabssm$last_pap_smear <= 2] <- 1
+
+#create cc test past year
+sabssm$pap_smear_past_1y[sabssm$ever_had_pap_smear == 0] <- 0
+sabssm$pap_smear_past_1y[sabssm$ever_had_pap_smear == 1 & sabssm$last_pap_smear == 1] <- 1
+sabssm$pap_smear_past_1y[sabssm$ever_had_pap_smear == 1 & sabssm$last_pap_smear != 1] <- 0
+
+sabssm$pap_smear_past_5y[sabssm$ever_had_pap_smear == 0] <- 0
+sabssm$pap_smear_past_5y[sabssm$ever_had_pap_smear == 1 & sabssm$last_pap_smear > 3] <- 0
+sabssm$pap_smear_past_5y[sabssm$ever_had_pap_smear == 1 & sabssm$last_pap_smear <= 3] <- 1
+
+sabssm <- filter(sabssm, (sex == 2) & (!is.na(weight)))
+hivp_sabssm <- filter(sabssm, (sex == 2) & (!is.na(weight)) & hivstat == 1)
+hivn_sabssm <- filter(sabssm, (sex == 2) & (!is.na(weight)) & hivstat == 0)
+
+save(sabssm, file = "Cleaned SABSSM")
+sabssm$wealth_quint
+table(is.na(sabssm$strata))
+```
+```{r missing data}
+a <- filter(sabssm2012, Q1_2 == 2 | !is.na(Q8_13))
+nrow(a)
+nrow(sabssm2012)
+sum(table(sabssm2012$Q8_13))
+sum(table(a$Q8_13))
+
+age.groups = data.frame(l_age = seq(15, 65, 5), u_age = c(seq(19, 64, 5), 1000))
+A <- nrow(age.groups)
+for(n in 1:nrow(sabssm2012)){
+  for(a in 1:A){
+    if(!is.na(sabssm2012$Q1_1[n]) & age.groups$l_age[a] <= sabssm2012$Q1_1[n] & age.groups$u_age[a] >= sabssm2012$Q1_1[n]){
+      agegr <- paste0(age.groups$l_age[a], "-", age.groups$u_age[a])
+      sabssm2012$agegr[n] <- agegr
+    }
+  }
+}
+
+dat_missing <- data.frame(Survey = NA,
+                 agegr = NA,
+                 elg_resp = NA,
+                 resp = NA,
+                 dk = NA,
+                 missing = NA)
+n=1
+for(a in 1:sort(length(unique(sabssm2012$agegr)))){
+   gr <- sort(unique(sabssm2012$agegr))[a]
+   df <- filter(sabssm2012, Q1_2 == 2 | !is.na(Q8_13))
+    df <- filter(df, agegr == gr)
+    id <- "sabssm"
+    tbl <- table(df$Q8_13)
+    df_tbl <- data.frame(tbl)
+    
+    elg_resp <- nrow(df)
+    resp <- sum(tbl)
+    missing <- elg_resp - resp
+    dat_missing[n, ] <- c(id, gr, elg_resp, resp, dk, missing)
+    print(id); print(gr); print(tbl)
+    n=n+1
+}
+
+sum(as.numeric(dat_missing$missing))
+```
+```{r explore}
+table(sabssm$ever_had_pap_smear)
+table(sabssm$ever_had_pap_smear, sabssm$pap_smear_past_3y)
+table(sabssm$pap_smear_past_1y)
+
+age.groups <- data.frame(seq(15, 65, 5), c(seq(19, 64, 5), 1000))
+df <- data.frame(agegr=c("15-19", "20-24", "25-29", "30-34",
+                              "35-39", "40-44", "45-49", "50-54", 
+                              "55-59", "60-64", "65-1000"))
+everhadpapsmear_sabssm <- df_age_fig(age.groups, sabssm, everhadpapsmear, df)
+papsmearpast1y_sabssm <- df_age_fig(age.groups, sabssm, papsmearpast1y, df)
+papsmearpast3y_sabssm <- df_age_fig(age.groups, sabssm, papsmearpast3y, df)
+
+everhadpapsmear_sabssm$time_length <- "ever"
+papsmearpast1y_sabssm$time_length <- "1y"
+papsmearpast3y_sabssm$time_length <- "3y"
+
+papsmear <- rbind(everhadpapsmear_sabssm[,c("agegr", "Mean", "time_length")],
+                  papsmearpast1y_sabssm[,c("agegr", "Mean", "time_length")],
+                  papsmearpast3y_sabssm[,c("agegr", "Mean", "time_length")])
+papsmear <- pivot_wider(papsmear, names_from = "time_length", values_from = "Mean")
+```
+# Proportion ever had pap smear
+```{r proportion with pap smear ever function}
+options(survey.lonely.psu="adjust")
+everhadpapsmear <-  function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear))
+  
+  design <- svydesign(data = sub_df, weights = ~weight, id = ~psu, strata = ~strata, nest = T)
+  m <- svyciprop(~ever_had_pap_smear, design = design)
+  ci <- confint(m)
+  
+  return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) 
+}
+```
+```{r proportion with pap smear in past 1y/3y/5y function}
+papsmearpast1y <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_1y))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    if(length(sub_df$strata) != 0){
+      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu, strata = ~strata, nest = T) 
+      m <- svyciprop(~pap_smear_past_1y, design = design)
+      ci <- confint(m)
+  
+      return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
+    } else{
+      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+      m <- svyciprop(~pap_smear_past_1y, design = design)
+      ci <- confint(m)
+  
+      return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
+    }
+  }
+}
+papsmearpast3y <- function(df, age1, age2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+    
+  }else{
+    if(length(sub_df$strata) != 0){
+      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu, strata = ~strata, nest = T)
+      m <- svyciprop(~pap_smear_past_3y, design = design)
+      ci <- confint(m)
+  
+      return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
+    } else{
+      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
+      m <- svyciprop(~pap_smear_past_3y, design = design)
+      ci <- confint(m)
+  
+      return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
+    }
+  }
+}
+```
+```{r proportion with pap smear 2012}
+age.groups <- data.frame(c(seq(15, 65, 5), rep(15, 5)), c(seq(19, 64, 5), 101, 49, 59, 64, 80, 101))
+df.age.groups <- data.frame(Age.Groups=c("15-19", "20-24", "25-29", "30-34",
+                                         "35-39", "40-44", "45-49", "50-54", 
+                                         "55-59", "60-64", "65-101", "15-49", 
+                                         "15-59", "15-64", "15-80", "15-101"))
+everhadpapsmear_sabssm <- df_age_fig(age.groups, sabssm_f, everhadpapsmear, df.age.groups)
+everhadpapsmear_sabssm2 <- df_age_xl(age.groups, sabssm_f, everhadpapsmear, df.age.groups)
+
+# everhadpapsmear_sabssm_hivp1 <- df_age_fig(age.groups, hivp_sabssm_f, everhadpapsmear, df.age.groups)
+# everhadpapsmear_sabssm_hivp2 <- df_age_xl(age.groups, hivp_sabssm_f, everhadpapsmear, df.age.groups)
+# 
+# everhadpapsmear_sabssm_hivn1 <- df_age_fig(age.groups, hivn_sabssm_f, everhadpapsmear, df.age.groups)
+# everhadpapsmear_sabssm_hivn2 <- df_age_xl(age.groups, hivn_sabssm_f, everhadpapsmear, df.age.groups)
+```
+```{r proportion with pap smear among those who used condom at last sex 2012}
+sabssm_f_condomlastsex <- filter(sabssm_f, condom_use == 1)
+sabssm_f_nocondomlastsex <- filter(sabssm_f, condom_use == 0)
+
+age.groups <- data.frame(c(seq(15, 65, 5), rep(15, 5) ), c(seq(19, 64, 5), 101, 49, 59, 64, 80, 101))
+df.age.groups <- data.frame(Age.Groups=c("15-19", "20-24", "25-29", "30-34",
+                                         "35-39", "40-44", "45-49", "50-54", 
+                                         "55-59", "60-64", "65-101", "15-49", 
+                                         "15-59", "15-64", "15-80", "15-101"))
+
+everhadpapsmear_sabssm_condomlastsex <- df_age_fig(age.groups, sabssm_f_condomlastsex, everhadpapsmear, df.age.groups)
+everhadpapsmear_sabssm2_nocodonomlastsex <- df_age_fig(age.groups, sabssm_f_nocondomlastsex, everhadpapsmear, df.age.groups)
+```
+```{r proportion with pap smear among those arv treated 2012}
+arv_sabssm_f <- filter(sabssm_f, arv == 1)
+noarv_sabssm_f <- filter(sabssm_f, arv == 0)
+
+papsmear_arvp_overall1_2012 <- df_age_fig(age.groups, arv_sabssm_f, everhadpapsmear, df.age.groups)
+papsmear_arvp_overall2_2012 <- df_age_xl(age.groups, arv_sabssm_f, everhadpapsmear, df.age.groups)
+papsmear_arvn_overall1_2012 <- df_age_fig(age.groups, noarv_sabssm_f, everhadpapsmear, df.age.groups)
+papsmear_arvn_overall2_2012 <- df_age_xl(age.groups, noarv_sabssm_f, everhadpapsmear, df.age.groups)
+```
+```{r}
+everhadpapsmear_sabssm$Status <- "Either HIV+ or HIV-"
+everhadpapsmear_sabssm_hivp1$Status <- "HIV+"
+everhadpapsmear_sabssm_hivn1$Status <- "HIV-"
+
+everhadpapsmear_sabssm_hiv <- rbind(everhadpapsmear_sabssm,
+                             everhadpapsmear_sabssm_hivp1,
+                             everhadpapsmear_sabssm_hivn1)
+
+everhadpapsmear_sabssm_hiv$Country <- "South Africa"
+everhadpapsmear_sabssm_hiv$Year <- "2016"
+
+everhadpapsmear_sabssm_hiv$Age.Groups <- factor(everhadpapsmear_sabssm_hiv$Age.Groups, levels = c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", 
+                                                           "55-59", "60-64", "65-101", "15-49", "15-59", "15-64", "15-80", "15-101"))
+```
+```{r}
+ggplot(everhadpapsmear_sabssm_hiv, aes(x = Age.Groups, y = Mean, fill = Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
+  ggtitle("SABSSM: Proportion ever had a papsmear by HIV status") + 
+  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2)) +
+  ylim(0,1)
+```
+
+```{r proportion with pap smear ever by SA level function}
+everhadpapsmear_SA <-  function(df, age1, age2, lifetimePartners1, lifetimePartners2){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear) & sex_partners_ever >= lifetimePartners1 & sex_partners_ever <= lifetimePartners2)
+  
+  if(length(sub_df$pap_smear) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+  }else{
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu)
+    m <- svyciprop(~pap_smear, design = design)
+    ci <- confint(m)
+    return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) 
+  }
+}
+```
+```{r proportion with pap smear ever by SA level 2012}
+age.groups <- data.frame(c(seq(15, 65, 5), 0), c(seq(19, 64, 5), 75, 75))
+sa.level <- data.frame(Lower = c(0, 2, 5, 0), Upper = c(1, 4, 1000, 1000))
+
+df1 <- data.frame(NumPartners = rep(c("0-1", "2-4", "5+", "All"), 12),
+                                  Age.Groups = c(rep("15-19", 4), rep("20-24", 4), rep("25-29", 4), rep("30-34", 4),
+                                                 rep("35-39", 4), rep("40-44", 4), rep("45-49", 4), rep("50-54", 4),
+                                                 rep("55-59", 4), rep("60-64", 4), rep("65-75", 4), rep("15-75", 4)))
+df2 <- data.frame(NumPartners = rep(c("0-1", "2-4", "5+", "All")))
+pap_smear1_overall_bySA_2012 <- df_age_sa_fig(age.groups, sa.level, sabssm_f, everhadpapsmear_SA, df1)
+pap_smear2_overall_bySA_2012 <- df_age_sa_xl(age.groups, sa.level, sabssm_f, everhadpapsmear_SA, df2)
+
+pap_smear1_hivp_bySA_2012 <- df_age_sa_fig(age.groups, sa.level, hivp_sabssm_f, everhadpapsmear_SA, df1)
+pap_smear2_hivp_bySA_2012 <- df_age_sa_xl(age.groups, sa.level, hivp_sabssm_f, everhadpapsmear_SA, df2)
+
+pap_smear1_hivn_bySA_2012 <- df_age_sa_fig(age.groups, sa.level, hivn_sabssm_f, everhadpapsmear_SA, df1)
+pap_smear2_hivn_bySA_2012 <- df_age_sa_xl(age.groups, sa.level, hivn_sabssm_f, everhadpapsmear_SA, df2)
+```
+
+# Duration since last pap smear
+```{r proportion length of time since last pap smear function}
+last_papsmear <-  function(df, age1, age2, time_length){
+  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(last_pap_smear))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+  }else{
+  sub_df$a <- 0
+  sub_df$a[sub_df$last_pap_smear == time_length] = 1
+  
+  design <- svydesign(data = sub_df, weights = ~weight, id = ~psu)
+  m <- svyciprop(~a, design = design)
+  ci <- confint(m)
+  
+  return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) 
+  }
+}
+```
+```{r proportion length of time since last pap smear 2012 1}
+age.groups <- data.frame(c(seq(15, 65, 5), 15), c(seq(19, 64, 5), 75, 75))
+time_length <- c(1:6)
+df1 <- data.frame(Age.Groups=rep(c("15-19", "20-24", "25-29", "30-34",
+                                            "35-39", "40-44", "45-49", "50-54", 
+                                            "55-59", "60-64", "65-75", "15-75"), 6),
+                            Time.Length = c(rep("Within the last year", 12), rep("2-3 years", 12), rep("4-5 years", 12),
+                                            rep("6-10 years", 12), rep("More than 10 years", 12), rep("Don't know", 12)))
+
+df2 <- data.frame (Time.Length = c("Within the last year", "2-3 years", "4-5 years", "6-10 years", "More than 10 years", "Don't know"))
+#for figures
+last_pap_smear1_overall_2012 <- df_2_fig(age.groups, time_length, sabssm_f, last_papsmear, df1)
+last_pap_smear1_hivp_2012 <- df_2_fig(age.groups, time_length, hivp_sabssm_f, last_papsmear, df1)
+last_pap_smear1_hivn_2012 <- df_2_fig(age.groups, time_length, hivn_sabssm_f, last_papsmear, df1)
+
+#for excel sheet
+last_pap_smear2_overall_2012 <- df_2_xl(age.groups, time_length, sabssm_f, last_papsmear, df2)
+last_pap_smear2_hivp_2012 <- df_2_xl(age.groups, time_length, hivp_sabssm_f, last_papsmear, df2)
+last_pap_smear2_hivn_2012 <- df_2_xl(age.groups, time_length, hivn_sabssm_f, last_papsmear, df2)
+
+age.groups <- data.frame(15, 101)
+time_length <- c(1:6)
+df1 <- data.frame(Age.Groups=rep(c("15-101"), 6),
+                            Time.Length = c(rep("Within the last year", 1), rep("2-3 years", 1), rep("4-5 years", 1),
+                                            rep("6-10 years", 1), rep("More than 10 years", 1), rep("Don't know", 1)))
+df_2_fig(age.groups, time_length, sabssm_f, last_papsmear, df1)
+```
+```{r proportion length of time since last pap smear for ARV treated 2012 1}
+age.groups <- data.frame(c(seq(15, 65, 5), 15), c(seq(19, 64, 5), 75, 75))
+time_length <- c(1:6)
+df1 <- data.frame(Age.Groups=rep(c("15-19", "20-24", "25-29", "30-34",
+                                            "35-39", "40-44", "45-49", "50-54", 
+                                            "55-59", "60-64", "65-75", "15-75"), 6),
+                            Time.Length = c(rep("Within the last year", 12), rep("2-3 years", 12), rep("4-5 years", 12),
+                                            rep("6-10 years", 12), rep("More than 10 years", 12), rep("Don't know", 12)))
+
+df2 <- data.frame (Time.Length = c("Within the last year", "2-3 years", "4-5 years", "6-10 years", "More than 10 years", "Don't know"))
+#for figures
+last_pap_smear1_arvp_2012 <- df_2_fig(age.groups, time_length, arv_sabssm_f, last_papsmear, df1)
+last_pap_smear1_arvn_2012 <- df_2_fig(age.groups, time_length, noarv_sabssm_f, last_papsmear, df1)
+
+#for excel sheet
+last_pap_smear2_arvp_2012 <- df_2_xl(age.groups, time_length, arv_sabssm_f, last_papsmear, df2)
+last_pap_smear2_arvn_2012 <- df_2_xl(age.groups, time_length, noarv_sabssm_f, last_papsmear, df2)
+```
+
+```{r proportion length of time since last pap smear among everyone function}
+last_papsmear_amongall <-  function(df, age1, age2, time_length){
+  sub_df <- filter(df, age >= age1 & age <= age2)
+  sub_df$last_pap_smear[sub_df$pap_smear == 0] <- 0
+  sub_df <- filter(sub_df, !is.na(last_pap_smear))
+  
+  if(nrow(sub_df) <= 1){
+    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
+  }else{
+  sub_df$a <- 0
+  sub_df$a[sub_df$last_pap_smear == time_length] = 1
+  
+  design <- svydesign(data = sub_df, weights = ~weight, id = ~psu)
+  m <- svyciprop(~a, design = design)
+  ci <- confint(m)
+  
+  return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2])) 
+  }
+}
+```
+```{r proportion length of time since last pap smear among everyone 2012 1}
+age.groups <- data.frame(c(seq(15, 65, 5), 0), c(seq(19, 64, 5), 75, 75))
+time_length <- c(1:6)
+df1 <- data.frame(Age.Groups=rep(c("15-19", "20-24", "25-29", "30-34",
+                                            "35-39", "40-44", "45-49", "50-54", 
+                                            "55-59", "60-64", "65-75", "15-75"), 6),
+                            Time.Length = c(rep("Within the last year", 12), rep("2-3 years", 12), rep("4-5 years", 12),
+                                            rep("6-10 years", 12), rep("More than 10 years", 12), rep("Don't know", 12)))
+
+df2 <- data.frame (Time.Length = c("Within the last year", "2-3 years", "4-5 years", "6-10 years", "More than 10 years", "Don't know"))
+#for figures
+last_pap_smear_amongall1_overall_2012 <- df_2_fig(age.groups, time_length, sabssm_f, last_papsmear_amongall, df1)
+last_pap_smear_amongall1_hivp_2012 <- df_2_fig(age.groups, time_length, hivp_sabssm_f, last_papsmear_amongall, df1)
+last_pap_smear_amongall1_hivn_2012 <- df_2_fig(age.groups, time_length, hivn_sabssm_f, last_papsmear_amongall, df1)
+
+#for excel sheet
+last_pap_smear_amongall2_overall_2012 <- df_2_xl(age.groups, time_length, sabssm_f, last_papsmear_amongall, df2)
+last_pap_smear_amongall2_hivp_2012 <- df_2_xl(age.groups, time_length, hivp_sabssm_f, last_papsmear_amongall, df2)
+last_pap_smear_amongall2_hivn_2012 <- df_2_xl(age.groups, time_length, hivn_sabssm_f, last_papsmear_amongall, df2)
+```
+```{r proportion length of time since last pap smear among everyone 2012 2}
+age.groups <- data.frame(c(seq(15, 45, 5), 15), c(seq(19, 49, 5), 49))
+time_length <- c(2:6)
+sabssm_f_2$last_pap_smear[sabssm_f$last_pap_smear == 1] <- 2
+df1 <- data.frame(Age.Groups=rep(c("15-19", "20-24", "25-29", "30-34",
+                                   "35-39", "40-44", "45-49", "15-49"), 5),
+                            Time.Length = c(rep("Within the last 3 years", 8), rep("4-5 years", 8),
+                                            rep("6-10 years", 8), rep("More than 10 years", 8), rep("Don't know", 8)))
+
+df2 <- data.frame (Time.Length = c("Within the last 3 years", "4-5 years", "6-10 years", "More than 10 years", "Don't know"))
+#for figures
+last_pap_smear_amongall1_overall_2012_2 <- df_2_fig(age.groups, time_length, sabssm_f_2, last_papsmear_amongall, df1)
+last_pap_smear_amongall1_hivp_2012_2 <- df_2_fig(age.groups, time_length, hivp_sabssm_f, last_papsmear_amongall, df1)
+last_pap_smear_amongall1_hivn_2012_2 <- df_2_fig(age.groups, time_length, hivn_sabssm_f, last_papsmear_amongall, df1)
+
+#for excel sheet
+last_pap_smear_amongall2_overall_2012_2 <- df_2_xl(age.groups, time_length, sabssm_f, last_papsmear_amongall, df2)
+last_pap_smear_amongall2_hivp_2012_2 <- df_2_xl(age.groups, time_length, hivp_sabssm_f, last_papsmear_amongall, df2)
+last_pap_smear_amongall2_hivn_2012_2 <- df_2_xl(age.groups, time_length, hivn_sabssm_f, last_papsmear_amongall, df2)
+```
