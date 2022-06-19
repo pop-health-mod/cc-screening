@@ -3,7 +3,7 @@
 #will need to update based on variables added 
 combined_pred <- function(df_pred, draws, hivstat, gni, pgm, age_pred, time_length_age_pred, gni_pred, multi_time_length){
   iter <- nrow(draws[[1]])
-  #iter <- 1000
+  #iter <- 1500
   
   df_3y <- matrix(NA, nrow = nrow(df_pred), ncol = iter)
   df_ever <- matrix(NA, nrow = nrow(df_pred), ncol = iter)
@@ -11,6 +11,7 @@ combined_pred <- function(df_pred, draws, hivstat, gni, pgm, age_pred, time_leng
   #link country to re_country and rs_hiv value - since we're adding countries that weren't originally predicted
   predicted_countries <- unique(select(filter(df_stan_all_count, predicted == "Y"), c(Country, Region)))
   pred_re_country <- data.frame(t(draws$re_country)[,1:iter], predicted_countries[order(predicted_countries$Country),])
+  pred_rs_hiv <- data.frame(t(draws$rs_hiv_country)[,1:iter], predicted_countries[order(predicted_countries$Country),])
   
   #add values for countries that don't have a predicted value - adding it here so it will change for each iteration
   non_predicted_countries <- unique(select(filter(df_stan_all_count, predicted == "N"), c(Country, Region)))
@@ -82,13 +83,13 @@ combined_pred <- function(df_pred, draws, hivstat, gni, pgm, age_pred, time_leng
       }
       
       if(pgm == T){
-        # pred_logit_prob_3y = pred_logit_prob_3y + draws$beta_pgm[i]*df_pred$pgm[p]
-        # pred_logit_prob_ever = pred_logit_prob_ever + draws$beta_pgm[i]*df_pred$pgm[p]
-        pred_logit_prob_3y = pred_logit_prob_3y + 
-          draws$rs_pgm[1:iter, df_pred$count_num[p]] * df_pred$pgm[p]
-        
-        pred_logit_prob_ever = pred_logit_prob_ever + 
-          draws$rs_pgm[1:iter, df_pred$count_num[p]] * df_pred$pgm[p]  
+        pred_logit_prob_3y = pred_logit_prob_3y + draws$beta_pgm[i]*df_pred$pgm[p]
+        pred_logit_prob_ever = pred_logit_prob_ever + draws$beta_pgm[i]*df_pred$pgm[p]
+        # pred_logit_prob_3y = pred_logit_prob_3y + 
+        #   draws$rs_pgm[1:iter, df_pred$count_num[p]] * df_pred$pgm[p]
+        # 
+        # pred_logit_prob_ever = pred_logit_prob_ever + 
+        #   draws$rs_pgm[1:iter, df_pred$count_num[p]] * df_pred$pgm[p]  
       }
       df_3y[p, ] = plogis(as.numeric(pred_logit_prob_3y)) 
       df_ever[p, ] = plogis(as.numeric(pred_logit_prob_ever)) 
@@ -104,8 +105,7 @@ weights <- function(agegr, hiv, years){
   colnames(pop_age) <- pop_age[1,]
   pop_age <- pop_age[-c(1:3), -c(1, 3, 5)]
   pop_age[,-c(1:2)] <- lapply(pop_age[,-c(1:2)], as.numeric)
-  #isolate to only those of a certain age
-  pop_age <- pop_age[pop_age$Age %in% agegr, ] #rmbr to use the age groups that were used for the model even if the post-model analysis uses other age groups
+  #pop_age <- pop_age[pop_age$Age %in% agegr, ] #rmbr to use the age groups that were used for the model even if the post-model analysis uses other age groups
   pop_age_long <- pivot_longer(pop_age, cols = -(1:2), names_to = "Year", values_to = "f_pop")
   pop_age_long$Year <- as.numeric(pop_age_long$Year)
   names(pop_age_long)[names(pop_age_long) == "Location"] <- "Country"
@@ -117,7 +117,28 @@ weights <- function(agegr, hiv, years){
   pop_age_long$Country[pop_age_long$Country == "United Republic of Tanzania"] <- "Tanzania"
   pop_age_long$Country[pop_age_long$Country == "Gambia"] <- "The Gambia"
   
-  pop_age_long <- pop_age_long[pop_age_long$Year %in% years,]
+  agegr_1549 <- c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49")
+  agegr_1524 <- c("15-19", "20-24")
+  agegr_2549 <- c("25-29", "30-34", "35-39", "40-44", "45-49")
+  
+  pop_age_1549 <- unique(pop_age_long %>%
+                           group_by(Country, Year) %>%
+                           filter(agegr %in% agegr_1549) %>%
+                           summarise(Country, Year, f_pop_1549 = sum(f_pop)))
+  pop_age_1524 <- unique(pop_age_long %>%
+                           group_by(Country, Year) %>%
+                           filter(agegr %in% agegr_1524) %>%
+                           summarise(Country, Year, f_pop_1524 = sum(f_pop)))
+  pop_age_2549 <- unique(pop_age_long %>%
+                           group_by(Country, Year) %>%
+                           filter(agegr %in% agegr_2549) %>%
+                           summarise(Country, Year, f_pop_2549 = sum(f_pop)))
+  
+  pop_age <- left_join(pop_age_1549, pop_age_1524)
+  pop_age <- left_join(pop_age, pop_age_2549)
+  
+  #isolate to only those of a certain age and year
+  pop_age_long <- pop_age_long[pop_age_long$Year %in% years & pop_age_long$agegr %in% agegr,]
   df_weights_long <- pop_age_long
   df_weights_long$poststrat_weight <- df_weights_long$f_pop
   
@@ -139,9 +160,28 @@ weights <- function(agegr, hiv, years){
     f_hivprev_1549$hivprev1549 <- as.numeric(f_hivprev_1549$hivprev1549)
     f_hivprev_1549$hivprev1549 <- f_hivprev_1549$hivprev1549/100
     
-    df_weights <- left_join(pop_age_long, f_hivprev_1549[f_hivprev_1549$Year %in% years,])
-    df_weights$hivpos_pop <- df_weights$hivprev1549*df_weights$f_pop
-    df_weights$hivneg_pop <- df_weights$f_pop - df_weights$hivprev1549*df_weights$f_pop
+    f_hivprev_1524 <- read.csv("f_hivprev_1524.csv")
+    toMatch <- c("Footnote", "lower", "upper")
+    f_hivprev_1524 <- f_hivprev_1524[,-grep(paste(toMatch, collapse = "|"), colnames(f_hivprev_1524))]
+    colnames(f_hivprev_1524) <- str_replace(colnames(f_hivprev_1524), "X", "")
+    f_hivprev_1524 <- pivot_longer(f_hivprev_1524, cols = -1, names_to = "Year", values_to = "hivprev1524" )
+    f_hivprev_1524$Country[f_hivprev_1524$Country == "United Republic of Tanzania"] <- "Tanzania"
+    f_hivprev_1524$Country[f_hivprev_1524$Country == "Cabo Verde"] <- "Cape Verde"
+    f_hivprev_1524$Country[f_hivprev_1524$Country == "Congo"] <- "Congo (Rep)"
+    f_hivprev_1524$Country[f_hivprev_1524$Country == "Gambia"] <- "The Gambia"
+    f_hivprev_1524$hivprev1524[f_hivprev_1524$hivprev1524 == "<0.1 "] <- 0.1
+    f_hivprev_1524$Year <- as.numeric(f_hivprev_1524$Year)
+    f_hivprev_1524$hivprev1524 <- as.numeric(f_hivprev_1524$hivprev1524)
+    f_hivprev_1524$hivprev1524 <- f_hivprev_1524$hivprev1524/100
+    
+    f_hivprev <- left_join(f_hivprev_1549, f_hivprev_1524)
+    f_hivprev <- left_join(pop_age, f_hivprev)
+    
+    f_hivprev$hivprev2549 <- (f_hivprev$hivprev1549*f_hivprev$f_pop_1549 - f_hivprev$hivprev1524*f_hivprev$f_pop_1524)/f_hivprev$f_pop_2549
+    
+    df_weights <- left_join(pop_age_long, f_hivprev[f_hivprev$Year %in% years,])
+    df_weights$hivpos_pop <- df_weights$hivprev2549*df_weights$f_pop
+    df_weights$hivneg_pop <- df_weights$f_pop - df_weights$hivprev2549*df_weights$f_pop
     df_weights_long <- pivot_longer(df_weights, cols = c("hivpos_pop", "hivneg_pop"), names_to = "hivstat_1", values_to = "hiv_pop")
     df_weights_long$hivstat <- ifelse(df_weights_long$hivstat_1 == "hivpos_pop", 1, 0)
     
@@ -580,19 +620,4 @@ dat_combine <- function(dat_ever, dat_3y){
   
   return(dat_combine)
 }
-  
-  
-
-# a <- cbind(dat_pred[,c("Country", "Region", "Year", "hivstat", "agegr", "poststrat_weight")], mean = rowMeans(df[[2]]))
-# a_south <- filter(a, Region == "Southern")
-# #View(a_south)
-# a_south$weighted_mean <- a_south$poststrat_weight * a_south$mean
-# a_south <- a_south %>%
-#   group_by(Year, hivstat) %>%
-#   mutate(gr_weighted_mean = sum(weighted_mean)/sum(poststrat_weight))
-
-
-
-
-
 
