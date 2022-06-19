@@ -1,5 +1,5 @@
 ---
-title: "STEPS"
+title: "STEPS - check the urban/rural + strata"
 output: html_document
 ---
 
@@ -31,17 +31,10 @@ zmsteps_raw <- read.csv("~/Documents/GitHub/HPV-HIV-Model/Steps/Zambia/zmb2017.c
 ```{r benin clean}
 bnsteps <- select(bnsteps_raw,
                    c(psu,
-                     urban_rural = stratum, #urban = 1; rural = 2
+                     strata = stratum, #urban = 1; rural = 2
                      weight = wstep1,
                      age,
                      sex, #Men; Women
-                     #region = province, can't find the code for this
-                     c10a,
-                     c10b,
-                     c10c,
-                     income = c11,
-                     edu = c5,
-                     marital_status = c7,
                      ever_cc_tested = cx1))
 bnsteps$ever_cc_tested[bnsteps$ever_cc_tested == 77] <- NA #code don't know as NA
 bnsteps$ever_cc_tested[bnsteps$ever_cc_tested == 2] <- 0
@@ -53,35 +46,15 @@ bnsteps$df <- "bnsteps"
 bnsteps$sex[bnsteps$sex == "Men"] <- 1
 bnsteps$sex[bnsteps$sex == "Women"] <- 2
 
-#recode education
-bnsteps$edu[bnsteps$edu == 1 | bnsteps$edu == 2] <- 0 #no schooling completed
-bnsteps$edu[bnsteps$edu == 3] <- 1 #primary education completed
-bnsteps$edu[bnsteps$edu == 4 ] <- 2 #secondary education completed
-bnsteps$edu[bnsteps$edu == 5 | bnsteps$edu == 6 | bnsteps$edu == 7] <- 3 #more than secondary  schooling completed
-bnsteps$edu[bnsteps$edu == 88] <- NA 
-
-#recode marital_status
-bnsteps$marital_status[bnsteps$marital_status == 1] <- 0 #never married
-bnsteps$marital_status[bnsteps$marital_status == 2] <- 1 #currently married
-bnsteps$marital_status[bnsteps$marital_status == 3] <- 4 #separated or divorced
-bnsteps$marital_status[bnsteps$marital_status == 5] <- 3 #widowed
-bnsteps$marital_status[bnsteps$marital_status == 6] <- 2 #cohabiting
-bnsteps$marital_status[bnsteps$marital_status == 88] <- NA 
-
 bnsteps <- filter(bnsteps, sex == 2 & !is.na(weight))
 ```
 ```{r botswana clean}
 btsteps <- select(btsteps_raw,
                    c(psu,
-                     urban_rural = stratum, #just 1 --> 1; not sure if this should be considered urban or rural however**
+                     strata = stratum,
                      weight = wstep1,
                      age,
                      sex,
-                     #region = province, can't find the code for this
-                     c10a, c10b, c10c, #level of income by week, month, year
-                     income = c11,
-                     edu = c5,
-                     marital_status = c7,
                      ever_cc_tested = cx1))
 btsteps$ever_cc_tested[btsteps$ever_cc_tested == 77] <- NA #code don't know as NA
 btsteps$ever_cc_tested[btsteps$ever_cc_tested == 2] <- 0
@@ -92,33 +65,6 @@ btsteps$df <- "btsteps"
 #Recode sex
 btsteps$sex[btsteps$sex == "Men"] <- 1
 btsteps$sex[btsteps$sex == "Women"] <- 2
-
-#create annual income variable
-btsteps$annual_income <- NA
-for(i in 1:nrow(btsteps)){
-  if(!is.na(btsteps$c10a[i])){
-    btsteps$annual_income[i] <- btsteps$c10a[i]*52
-  }else if(!is.na(btsteps$c10b[i])){
-    btsteps$annual_income[i] <- btsteps$c10b[i]*12
-  }else if(!is.na(btsteps$c10c[i])){
-    btsteps$annual_income[i] <- btsteps$c10c[i]
-  }
-}
-
-#recode education
-btsteps$edu[btsteps$edu == 1 | btsteps$edu == 2] <- 0 #no schooling completed
-btsteps$edu[btsteps$edu == 3] <- 1 #primary education completed
-btsteps$edu[btsteps$edu == 4 | btsteps$edu == 5 | btsteps$edu == 6] <- 2 #secondary education completed
-btsteps$edu[btsteps$edu == 7 | btsteps$edu == 8 | btsteps$edu == 9] <- 3 #more than secondary completed schooling
-btsteps$edu[btsteps$edu == 88] <- NA 
-
-#recode marital_status
-btsteps$marital_status[btsteps$marital_status == 1] <- 0
-btsteps$marital_status[btsteps$marital_status == 2] <- 1
-btsteps$marital_status[btsteps$marital_status == 3] <- 4 
-btsteps$marital_status[btsteps$marital_status == 5] <- 3
-btsteps$marital_status[btsteps$marital_status == 6] <- 2
-btsteps$marital_status[btsteps$marital_status == 88] <- NA 
 
 btsteps <- filter(btsteps, sex == 2 & !is.na(weight))
 ```
@@ -132,6 +78,7 @@ cpvsteps <- select(cpvsteps_raw,
                      ever_cc_tested = cx1,
                      age_first_tested = cx2,
                      last_cc_test = cx3,
+                     last_cc_test_result = cx6,
                      cc_treated = cx8))
 
 cpvsteps$Year <- 2019
@@ -155,6 +102,7 @@ cpvsteps$cc_test_past_1y[cpvsteps$last_cc_test > 1] <- 0
 cpvsteps$cc_test_past_1y[cpvsteps$ever_cc_tested == 0] <- 0
 
 cpvsteps$cc_treated[cpvsteps$cc_treated == 77] <- NA
+cpvsteps$cc_treated[cpvsteps$last_cc_test_result == 5 | cpvsteps$last_cc_test_result == 77] <- NA
 cpvsteps$cc_treated[cpvsteps$cc_treated == 2] <- 0
 
 cpvsteps <- filter(cpvsteps, sex == 2 & !is.na(weight))
@@ -171,13 +119,6 @@ szsteps <- select(szsteps_raw,
                      weight = wstep1,
                      age,
                      sex,
-                     #region = province, can't find the code for this
-                     c10a,
-                     c10b,
-                     c10c,
-                     income = c11,
-                     edu = c5,
-                     marital_status = c7,
                      ever_cc_tested = cx1))
 szsteps$ever_cc_tested[szsteps$ever_cc_tested == 77] <- NA #code don't know as NA
 szsteps$ever_cc_tested[szsteps$ever_cc_tested == 2] <- 0
@@ -189,33 +130,6 @@ szsteps$df <- "szsteps"
 szsteps$sex[szsteps$sex == "Men"] <- 1
 szsteps$sex[szsteps$sex == "Women"] <- 2
 
-#create annual income variable
-szsteps$annual_income <- NA
-for(i in 1:nrow(szsteps)){
-  if(!is.na(szsteps$c10a[i])){
-    szsteps$annual_income[i] <- szsteps$c10a[i]*52
-  }else if(!is.na(szsteps$c10b[i])){
-    szsteps$annual_income[i] <- szsteps$c10b[i]*12
-  }else if(!is.na(szsteps$c10c[i])){
-    szsteps$annual_income[i] <- szsteps$c10c[i]
-  }
-}
-
-#recode education
-szsteps$edu[szsteps$edu == 1 | szsteps$edu == 2] <- 0 #no schooling completed
-szsteps$edu[ szsteps$edu == 3] <- 1 #primary education completed
-szsteps$edu[szsteps$edu == 4 | szsteps$edu == 5] <- 2 #secondary education completed
-szsteps$edu[szsteps$edu == 6 | szsteps$edu == 7] <- 3 #more than secondary schooling completed
-szsteps$edu[szsteps$edu == 88] <- NA 
-
-#recode marital_status
-szsteps$marital_status[szsteps$marital_status == 1] <- 0 #never married
-szsteps$marital_status[szsteps$marital_status == 2] <- 1 #currently married
-szsteps$marital_status[szsteps$marital_status == 3] <- 4 #separated or divorced
-szsteps$marital_status[szsteps$marital_status == 5] <- 3 #widowed
-szsteps$marital_status[szsteps$marital_status == 6] <- 2 #cohabiting
-szsteps$marital_status[szsteps$marital_status == 88] <- NA 
-
 szsteps <- filter(szsteps, sex == 2 & !is.na(weight))
 ```
 ```{r ethiopia clean}
@@ -223,49 +137,15 @@ ethsteps <- select(ethsteps_raw,
                    c(psu,
                      strata = stratum,
                      weight = wstep1,
-                     urban_rural = urbanrural, #urban = 1 and rural = 2
                      age = c3,
                      sex = c1,
                      region,
-                     c10a,
-                     c10b,
-                     c10c,
-                     income = c11,
-                     edu = c5,
-                     marital_status = c7,
                      ever_cc_tested = cx1))
 ethsteps$ever_cc_tested[ethsteps$ever_cc_tested == 77] <- NA #code don't know as NA
 ethsteps$ever_cc_tested[ethsteps$ever_cc_tested == 2] <- 0
 ethsteps$Year <- 2015
 ethsteps$Country <- "Ethiopia"
 ethsteps$df <- "ethsteps"
-
-#create annual income variable
-ethsteps$annual_income <- NA
-for(i in 1:nrow(ethsteps)){
-  if(!is.na(ethsteps$c10a[i])){
-    ethsteps$annual_income[i] <- ethsteps$c10a[i]*52
-  }else if(!is.na(ethsteps$c10b[i])){
-    ethsteps$annual_income[i] <- ethsteps$c10b[i]*12
-  }else if(!is.na(ethsteps$c10c[i])){
-    ethsteps$annual_income[i] <- ethsteps$c10c[i]
-  }
-}
-
-#recode education
-ethsteps$edu[ethsteps$edu == 1 | ethsteps$edu == 2 ] <- 0 #no schooling completed 
-ethsteps$edu[ethsteps$edu == 3] <- 1 #primary education completed
-ethsteps$edu[ethsteps$edu == 4 ] <- 2 #secondary education completed
-ethsteps$edu[ethsteps$edu == 6 | ethsteps$edu == 7] <- 3 #more than secondary schooling completed
-ethsteps$edu[ethsteps$edu == 88] <- NA 
-
-#recode marital_status
-ethsteps$marital_status[ethsteps$marital_status == 1] <- 0 #never married
-ethsteps$marital_status[ethsteps$marital_status == 2] <- 1 #currently married
-ethsteps$marital_status[ethsteps$marital_status == 3] <- 4 #separated or divorced
-ethsteps$marital_status[ethsteps$marital_status == 5] <- 3 #widowed
-ethsteps$marital_status[ethsteps$marital_status == 6] <- 2 #cohabiting
-ethsteps$marital_status[ethsteps$marital_status == 88] <- NA 
 
 ethsteps <- filter(ethsteps, sex == 2 & !is.na(weight))
 ```
@@ -274,13 +154,8 @@ knsteps <- select(knsteps_raw,
                    c(psu,
                      strata = stratum,
                      weight = wstep1, #there are also wstep2 and 3 - which one should I use (step 1 I believe as it refers to the weights for the interview)
-                     urban_rural = residence, #rural = 1 and urban = 2
                      age = age,
                      sex = sex,
-                     wealth,
-                     #region = province, can't find the code for this
-                     edu_label = C5,
-                     marital_status = C7,
                      ever_cc_tested = CX1))
 
 knsteps$ever_cc_tested[knsteps$ever_cc_tested == 7] <- NA #code don't know as NA
@@ -293,45 +168,16 @@ knsteps$df <- "knsteps"
 knsteps$sex[knsteps$sex == "Men"] <- 1
 knsteps$sex[knsteps$sex == "Women"] <- 2
 
-#recode urban_rural so that urban = 1 and rural = 2
-knsteps$urban_rural[knsteps$urban_rural == "Urban"] <- 1
-knsteps$urban_rural[knsteps$urban_rural == "Rural"] <- 2
-
-#recode education
-knsteps$edu[knsteps$edu_label == "No formal schooling" | knsteps$edu_label == "Primary school incomplete"] <- 0 #no schooling completed
-knsteps$edu[knsteps$edu_label == "Primary school completed" | knsteps$edu_label == "Secondary school incomplete"] <- 1 #primary education completed
-knsteps$edu[knsteps$edu_label == "Secondary school completed" | knsteps$edu_label == "A-Level completed"] <- 2 #secondary education completed
-knsteps$edu[knsteps$edu_label == "College/University completed" | knsteps$edu_label == "Post-graduate degree"] <- 3 #more than secondary schooling completed
-knsteps$edu[knsteps$edu_label == "Refused"] <- NA 
-
-#recode marital_status
-knsteps$marital_status[knsteps$marital_status == 1] <- 0 #never married
-knsteps$marital_status[knsteps$marital_status == 2] <- 1 #currently married
-knsteps$marital_status[knsteps$marital_status == 3] <- 4 #separated or divorced
-knsteps$marital_status[knsteps$marital_status == 5] <- 3 #widowed
-knsteps$marital_status[knsteps$marital_status == 6] <- 2 #cohabiting
-knsteps$marital_status[knsteps$marital_status == 88] <- NA 
-
-#recode wealth
-knsteps$wealth_quint[knsteps$wealth == "1 Poorest"] <- 1
-knsteps$wealth_quint[knsteps$wealth == "2 Second"] <- 2
-knsteps$wealth_quint[knsteps$wealth == "3 Middle"] <- 3
-knsteps$wealth_quint[knsteps$wealth == "4 Fourth"] <- 4
-knsteps$wealth_quint[knsteps$wealth == "5 Richest"] <- 5
-
 knsteps <- filter(knsteps, sex == 2 & !is.na(weight))
 ```
 ```{r malawi clean}
 mlsteps <- select(mlsteps_raw,
                    c(psu,
                      strata = stratum,
-                     urban_rural = urbanrural, #char urban or rural
                      weight = wstep1,
                      age,
                      sex,
-                     edu = c5,
-                     marital_status = c7,
-                     ever_cc_tested = cx1))
+                    ever_cc_tested = cx1))
 mlsteps$ever_cc_tested[mlsteps$ever_cc_tested == 77] <- NA #code don't know as NA
 mlsteps$ever_cc_tested[mlsteps$ever_cc_tested == 2] <- 0
 mlsteps$Year <- 2017
@@ -341,25 +187,6 @@ mlsteps$df <- "mlsteps"
 #Recode sex
 mlsteps$sex[mlsteps$sex == "Men"] <- 1
 mlsteps$sex[mlsteps$sex == "Women"] <- 2
-
-#recode urban_rural so that urban = 1 and rural = 2
-mlsteps$urban_rural[mlsteps$urban_rural == "Urban"] <- 1
-mlsteps$urban_rural[mlsteps$urban_rural == "Rural"] <- 2
-
-#recode education
-mlsteps$edu[mlsteps$edu == 1] <- 0 #no schooling
-mlsteps$edu[mlsteps$edu == 2 | mlsteps$edu == 3] <- 1 #primary education
-mlsteps$edu[mlsteps$edu == 4] <- 2 #secondary education
-mlsteps$edu[mlsteps$edu == 5] <- 3 #more than secondary schooling
-mlsteps$edu[mlsteps$edu == 88] <- NA 
-
-#recode marital_status
-mlsteps$marital_status[mlsteps$marital_status == 1] <- 0 #never married
-mlsteps$marital_status[mlsteps$marital_status == 2] <- 1 #currently married
-mlsteps$marital_status[mlsteps$marital_status == 3] <- 4 #separated or divorced
-mlsteps$marital_status[mlsteps$marital_status == 5] <- 3 #widowed
-mlsteps$marital_status[mlsteps$marital_status == 6] <- 2 #cohabiting
-mlsteps$marital_status[mlsteps$marital_status == 88] <- NA 
 
 mlsteps <- filter(mlsteps, sex == 2 & !is.na(weight))
 ```
@@ -372,27 +199,10 @@ snsteps <- select(snsteps_raw,
                      Year = i4c,
                      agegr = c3r,
                      sex = c1, #1 = homme;2 = femme
-                     edu = c5,
-                     marital_status = c7,
                      ever_cc_tested = cx1))
 
 snsteps$Country <- "Senegal"
 snsteps$df <- "snsteps"
-
-#recode education
-snsteps$edu[snsteps$edu == 1] <- 0 #no schooling
-snsteps$edu[snsteps$edu == 2 | snsteps$edu == 3] <- 1 #primary education
-snsteps$edu[snsteps$edu == 4 | snsteps$edu == 5] <- 2 #secondary education
-snsteps$edu[snsteps$edu == 6 | snsteps$edu == 7] <- 3 #more than secondary schooling
-snsteps$edu[snsteps$edu == 88] <- NA 
-
-#recode marital_status
-snsteps$marital_status[snsteps$marital_status == 1] <- 0 #never married
-snsteps$marital_status[snsteps$marital_status == 2] <- 1 #currently married
-snsteps$marital_status[snsteps$marital_status == 3] <- 4 #separated or divorced
-snsteps$marital_status[snsteps$marital_status == 5] <- 3 #widowed
-snsteps$marital_status[snsteps$marital_status == 6] <- 2 #cohabiting
-snsteps$marital_status[snsteps$marital_status == 88] <- NA 
 
 #Recode age - this was inferred from the stats on the broad age group 
 snsteps$agegr <- as.character(snsteps$agegr)
@@ -414,26 +224,6 @@ snsteps$ever_cc_tested[snsteps$ever_cc_tested == 77] <- NA #code don't know as N
 snsteps$ever_cc_tested[snsteps$ever_cc_tested == 2] <- 0
 
 snsteps <- filter(snsteps, sex == 2 & !is.na(weight))
-
-#find year at the midpoint of data
-# for(i in 1:nrow(snsteps)){
-#   snsteps$interview_date[i] <- snsteps$Year[i] + snsteps$interview_month[i]/12
-# }
-# median(snsteps$interview_date)
-# mean(snsteps$interview_date)
-# table(snsteps$interview_date)
-
-# sum(table(snsteps_raw[snsteps_raw$sex == "Women",]$cx1))
-# sum(table(snsteps$ever_cc_tested))
-# table(is.na(snsteps$ever_cc_tested))
-# nrow(filter(snsteps, agegr == 1 | agegr == 2))
-# nrow(filter(snsteps, agegr == 3 | agegr == 4 | agegr == 5))
-# nrow(filter(snsteps, agegr == 6 | agegr == 7 | agegr == 8))
-# nrow(filter(snsteps, agegr == 9 | agegr == 10))
-# nrow(snsteps)
-# View(snsteps_raw)
-# nrow(filter(snsteps_raw, c3r == 9 |c3r == 10))
-# nrow(filter(snsteps_raw, !is.na(c3r)))
 ```
 ```{r sao tome and principe clean}
 stpsteps <- select(stpsteps_raw,
@@ -465,17 +255,10 @@ table(is.na(stpsteps$ever_cc_tested))
 ```{r uganda clean}
 ugsteps <- select(ugsteps_raw,
                    c(psu,
-                     urban_rural = stratum, #urban = 1; rural = 2
+                     strata = stratum, #urban = 1; rural = 2
                      weight = wstep1,
                      age,
                      sex,
-                     #region = province, can't find the code for this
-                     c10a,
-                     c10b,
-                     c10c,
-                     income = c11,
-                     edu = c5,
-                     marital_status = c7,
                      ever_cc_tested = cx1))
 ugsteps$ever_cc_tested[ugsteps$ever_cc_tested == 77] <- NA #code don't know as NA
 ugsteps$ever_cc_tested[ugsteps$ever_cc_tested == 2] <- 0
@@ -487,47 +270,15 @@ ugsteps$df <- "ugsteps"
 ugsteps$sex[ugsteps$sex == "Men"] <- 1
 ugsteps$sex[ugsteps$sex == "Women"] <- 2
 
-#create annual income variable
-ugsteps$annual_income <- NA
-for(i in 1:nrow(ugsteps)){
-  if(!is.na(ugsteps$c10a[i])){
-    ugsteps$annual_income[i] <- ugsteps$c10a[i]*52
-  }else if(!is.na(ugsteps$c10b[i])){
-    ugsteps$annual_income[i] <- ugsteps$c10b[i]*12
-  }else if(!is.na(ugsteps$c10c[i])){
-    ugsteps$annual_income[i] <- ugsteps$c10c[i]
-  }
-}
-
-#recode education
-ugsteps$edu[ugsteps$edu == 1] <- 0 #no schooling completed
-ugsteps$edu[ugsteps$edu == 2 ] <- 1 #primary education completed
-ugsteps$edu[ugsteps$edu == 3 | ugsteps$edu == 4 | ugsteps$edu == 5] <- 2 #secondary education completed
-ugsteps$edu[ugsteps$edu == 6 | ugsteps$edu == 7] <- 3 #more than secondary schooling completed
-ugsteps$edu[ugsteps$edu == 88] <- NA 
-
-#recode marital_status
-ugsteps$marital_status[ugsteps$marital_status == 1] <- 0 #never married
-ugsteps$marital_status[ugsteps$marital_status == 2] <- 1 #currently married
-ugsteps$marital_status[ugsteps$marital_status == 3] <- 4 #separated or divorced
-ugsteps$marital_status[ugsteps$marital_status == 5] <- 3 #widowed
-ugsteps$marital_status[ugsteps$marital_status == 6] <- 2 #cohabiting
-ugsteps$marital_status[ugsteps$marital_status == 88] <- NA 
-
 ugsteps <- filter(ugsteps, sex == 2 & !is.na(weight))
 ```
 ```{r zambia clean}
 zmsteps <- select(zmsteps_raw,
                    c(psu,
-                     urban_rural = stratum, #rural = 1; urban = 2
+                     strata = stratum, #rural = 1; urban = 2
                      weight = wstep1,
                      age,
                      sex,
-                     c10, 
-                     c10type,
-                     income = c11,
-                     edu = c5,
-                     marital_status = c7,
                      ever_cc_tested = cx1))
 zmsteps$ever_cc_tested[zmsteps$ever_cc_tested == 77] <- NA #code don't know as NA
 zmsteps$ever_cc_tested[zmsteps$ever_cc_tested == 2] <- 0
@@ -540,24 +291,9 @@ zmsteps$sex[zmsteps$sex == "Men"] <- 1
 zmsteps$sex[zmsteps$sex == "Women"] <- 2
 
 #recode urban_rural so that urban = 1 and rural = 2
-zmsteps$urban_rural[zmsteps$urban_rural == 1] <- 0
-zmsteps$urban_rural[zmsteps$urban_rural == 2] <- 1
-zmsteps$urban_rural[zmsteps$urban_rural == 0] <- 2
-
-#recode education
-zmsteps$edu[zmsteps$edu == 1 | zmsteps$edu == 2] <- 0 #no schooling completed
-zmsteps$edu[zmsteps$edu == 3] <- 1 #primary education completed
-zmsteps$edu[zmsteps$edu == 4 | zmsteps$edu == 5] <- 2 #secondary education completed
-zmsteps$edu[zmsteps$edu == 6 | zmsteps$edu == 7] <- 3 #more than secondary schooling completed
-zmsteps$edu[zmsteps$edu == 88] <- NA 
-
-#recode marital_status
-zmsteps$marital_status[zmsteps$marital_status == 1] <- 0
-zmsteps$marital_status[zmsteps$marital_status == 2] <- 1
-zmsteps$marital_status[zmsteps$marital_status == 3] <- 4 #will assume that those who report in a steady relationship but not married or those who are single have never been married
-zmsteps$marital_status[zmsteps$marital_status == 5] <- 3
-zmsteps$marital_status[zmsteps$marital_status == 6] <- 2
-zmsteps$marital_status[zmsteps$marital_status == 88] <- NA #will assume civil union is the same as married
+zmsteps$strata[zmsteps$strata == 1] <- 0
+zmsteps$strata[zmsteps$strata == 2] <- 1
+zmsteps$strata[zmsteps$strata == 0] <- 2
 
 zmsteps <- filter(zmsteps, sex == 2 & !is.na(weight))
 ```
@@ -634,5 +370,5 @@ for(i in 1:length(steps_list)){
 ```{r save}
 #load("Cleaned STEPS")
 save(bnsteps, btsteps, cpvsteps, ethsteps, knsteps, mlsteps, snsteps, stpsteps, szsteps, ugsteps, zmsteps,
-     file = "Cleaned STEPS")
+     file = "New Cleaned STEPS")
 ```
