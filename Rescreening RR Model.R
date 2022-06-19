@@ -15,33 +15,6 @@ det_avail <- read_excel("surveys.xlsx", sheet = 3)
 eco_det <- read_excel("surveys.xlsx", sheet = 4)
 screening_program <- read_excel("surveys.xlsx", sheet = 5)
 
-# for(i in 1:length(unique(dat$surveyid))){
-#   dat_count <- filter(dat, surveyid == unique(dat$surveyid)[i])
-#   initial <- mean(na.omit(dat_count$diff_ever_1y))
-#   retest <- mean(na.omit(dat_count$retest_1y))
-#   retest/initial
-#   mean(na.omit(dat_count$retest_1y)/na.omit(dat_count$diff_ever_1y))
-#   
-#   screening_ever <- dat_count$ever
-#   screening_never_prev <- 1 - dat_count$ever_previous
-#   screening_diff_ever <- dat_count$diff_ever_1y
-#   initial <- screening_diff_ever/screening_never_prev
-#   plot(initial)
-#   mtext(paste0(unique(dat$surveyid)[i]), side = 3, cex = 0.9, line = -1)
-#   
-#   screening_retest <- dat_count$retest_1y
-#   screening_ever_prev <- dat_count$ever_previous
-#   rescreen <- screening_retest/screening_ever_prev
-#   plot(rescreen)
-#   
-#   beta <- rescreen/initial
-#   plot(beta)
-#   median(na.omit(beta))
-#   
-#   print(mean(dat_count$den))
-#   print(unique(dat$surveyid)[i])
-# }
-
 # stan model
 library(rstan)
 cc_mod_count_combine <- '
@@ -151,8 +124,8 @@ model {
       ln_beta_reg ~ normal(ln_beta_overall, sd_beta_overall);
       ln_beta_overall ~ normal(0, 5);
         
-      sd_beta_reg ~ normal(0, 10);
-      sd_beta_overall ~ normal(0, 10) T[0, 100];
+      sd_beta_reg ~ normal(0, 15);
+      sd_beta_overall ~ normal(0, 5) T[0, 100];
   
       for(j in 1:n_count_ecw){
         ln_lambda_ecw[,j] ~ normal(log(0.005), 5);
@@ -161,49 +134,11 @@ model {
         ln_lambda_s[,j] ~ normal(log(0.005), 5);
       }
   }
-//generated quantities {
-    //matrix[n_obs_ecw, n_count_ecw] prd_pyr_num_ecw;
-    //matrix[n_obs_ecw, n_count_ecw] prd_evr_num_ecw;   
-    //matrix[n_obs_ecw, n_count_ecw] prd_evr_ecw;  
-    //matrix[n_obs_ecw, n_count_ecw] prd_pyr_ecw;
-    
-    //matrix[n_obs_s, n_count_s] prd_pyr_num_s;
-    //matrix[n_obs_s, n_count_s] prd_evr_num_s;   
-    //matrix[n_obs_s, n_count_s] prd_evr_s;  
-    //matrix[n_obs_s, n_count_s] prd_pyr_s;
-    
-    //for(j in 1:n_count_ecw){
-      //matrix[n_obs_ecw, 2] local_ecw = cc_model(n_obs_ecw, svy_ever_ecw[,j], lambda_ecw[,j], beta_ecw[j], recall_period);
-    
-      //for (i in 1:n_obs_ecw) {
-        // we predict the observations
-        //prd_evr_num_ecw[i, j] = binomial_rng(svy_evr_den_ecw[i, j], local_ecw[ind_obs_ecw[i], 1]);   
-        //prd_pyr_num_ecw[i, j] = binomial_rng(svy_pyr_den_ecw[i, j], local_ecw[ind_obs_ecw[i], 2]);
-        //prd_evr_ecw[i, j] = prd_evr_num_ecw[i, j] / svy_evr_den_ecw[i, j];
-        //prd_pyr_ecw[i, j] = prd_pyr_num_ecw[i, j] / svy_pyr_den_ecw[i, j];
-      //}
-    //}
-    
-    //for(j in 1:n_count_s){
-      //matrix[n_obs_s, 2] local_s = cc_model(n_obs_s, svy_ever_s[,j], lambda_s[,j], beta_s[j], recall_period);
-    
-      //for (i in 1:n_obs_s) {
-        // we predict the observations
-        //prd_evr_num_s[i, j] = binomial_rng(svy_evr_den_s[i, j], local_s[ind_obs_s[i], 1]);   
-        //prd_pyr_num_s[i, j] = binomial_rng(svy_pyr_den_s[i, j], local_s[ind_obs_s[i], 2]);
-        //prd_evr_s[i, j] = prd_evr_num_s[i, j] / svy_evr_den_s[i, j];
-        //prd_pyr_s[i, j] = prd_pyr_num_s[i, j] / svy_pyr_den_s[i, j];
-      //}
-    //}
-  //}  
 '
 cc_stan_count_combine <- stan_model(model_code = cc_mod_count_combine)
 
 #fit data to model
 dat <- readRDS("dat_retest.rds"); nrow(dat)
-# s_ind = 8
-# s_id <- unique(dat$surveyid)
-# dat <- filter(dat, surveyid == s_id[s_ind])
 dat$den_previous <- NA
 dat$ever_previous <- NA
 dat$surveyid <- paste0(dat$surveyid, dat$Year)
@@ -296,17 +231,17 @@ data_stan <- list(ind_obs_ecw = ind_obs_ecw,
                   svy_ever_s = svy_ever_s,
                   recall_period = recall_period)
 rstan_options(auto_write = TRUE)
-#View(init_rates_count[init_rates_count$Country == "South Africa", 1:10])
 #' -----------------------------------
 # ---- Step 2: fitting the model ----
 #' -----------------------------------
 # we fit the model 
 options(mc.cores = parallel::detectCores())
-fit <- sampling(cc_stan_count_combine, data = data_stan, iter = 2000, chains = 4, refresh = 100,
-                warmup = 1000, thin = 1, control = list(adapt_delta = 0.999, stepsize = 0.001, max_treedepth = 20))
+fit <- sampling(cc_stan_count_combine, data = data_stan, iter = 6000, chains = 4, refresh = 100,
+                warmup = 3000, thin = 1, control = list(adapt_delta = 0.99, stepsize = 0.001, max_treedepth = 20))
 #save(list_surveys, data_stan, fit, cc_stan_count_combine, file = "rescreen_1.5")
 View(data.frame(rstan::summary(fit, pars = c("beta"), probs = c(0.025, 0.5, 0.975))$summary))
 rstan::summary(fit, pars = c("beta_ecw", "beta_s", "beta_overall", "beta_reg"), probs = c(0.025, 0.5, 0.975))$summary
+rstan::stan_trace(fit, pars = c("sd_beta_reg", "sd_beta_overall"))
 #fit_beta <- data.frame(rstan::summary(fit, pars = c("beta"), probs = c(0.025, 0.5, 0.975))$summary)
 
 rstan::summary(fit, pars = c("beta"), probs = c(0.025, 0.5, 0.975))$summary
@@ -316,12 +251,8 @@ fit_beta <- rbind(fit_beta_bndhs, fit_beta_cpvsteps, fit_beta_ethphia, fit_beta_
                   fit_beta_rwphia, fit_beta_sabssm, fit_beta_sasage, fit_beta_tzphia, fit_beta_zmphia, fit_beta_zwdhs, fit_beta_zwphia, 
                   fit_beta_s, fit_beta_ecw)
 fit_beta$df <- c(s_id, "S Overall", "ECW Overall")
-save(fit_beta, file = "fit_beta")
+#save(fit_beta, file = "fit_beta")
 
-#load("retest_combined_1929_26_s")
-
-# save(fit, data_stan, cc_stan, cc_mod, file = paste0("./cc_model"))
-# load(paste0("./cc_model")); library(rstan)
 rstan::stan_trace(fit, pars = c("lambda"))
 rstan::stan_trace(fit, pars = c("beta"))
 rstan::stan_trace(fit, pars = c("sd_rw"))
@@ -331,35 +262,8 @@ rstan::summary(fit, pars = c("age_eff"), probs = c(0.025, 0.5, 0.975))$summary
 rstan::summary(fit, pars = c("ln_beta_count", "sd_beta_count"), probs = c(0.025, 0.5, 0.975))$summary
 
 #' -----------------------------------
-# ---- Step 3: Visualize data ----
+# ---- Step 3: View data ----
 #' -----------------------------------
-#beta for each country
-beta <- rstan::summary(fit, pars = c("beta"), probs = c(0.025, 0.5, 0.975))$summary
-surveyid <- NA
-for(i in 1:n_count){
-  surveyid[i] <- unique(list_surveys[[i]]$surveyid)
-}
-dat_beta <- data.frame(cbind(surveyid, beta))
-dat_beta_clean <- dat_beta[,c("surveyid", "X50.", "X2.5.", "X97.5.")]
-# cys <- c("Benin_2018_DHS", "Lesotho*_2009_DHS", "Lesotho*_2014_DHS", "Zimbabwe_2015_DHS", "Ethiopia_2018_PHIA", "Malawi_2016_PHIA",
-#          "Rwanda_2019_PHIA", "Tanzania_2017_PHIA", "Zambia_2016_PHIA", "Zimbabwe_2016_PHIA", "South Africa*_2012_SABSSM", "Cape Verde**_2019_STEPS")
-cys <- NA
-if(Southern == T){
-  cys <- c("Lesotho_2009_DHS", "Lesotho_2014_DHS", "South Africa_2012_SABSSM", "South Africa_2007_SAGE", "Zimbabwe_2015_DHS", "Zimbabwe_2016_PHIA")
-} else{
-  cys <- c("Benin_2018_DHS", "Cape Verde_2019_STEPS", "Ethiopia_2018_PHIA", "Ghana_2007_SAGE", "Malawi_2016_PHIA", 
-           "Rwanda_2019_PHIA", "Tanzania_2017_PHIA", "Zambia_2016_PHIA")
-}
-cys_split <- data.frame(str_split_fixed(cys, "_", 3))
-dat_beta_clean <- cbind(dat_beta_clean, cys_split)
-rownames(dat_beta_clean) <- NULL
-colnames(dat_beta_clean) <- c("surveyid", "Median", "Lower", "Upper", "Country", "Year", "Survey")
-dat_beta_clean_comb <- data.frame(dat_beta_clean[,c(5:7, 2:4)])
-dat_beta_clean_comb[,c(4:6)] <- lapply(dat_beta_clean_comb[,c(4:6)], as.numeric)
-dat_beta_clean_comb[,c(4:6)] <- round(dat_beta_clean_comb[,c(4:6)], 2)
-kbl(dat_beta_clean_comb, align = "c", caption = paste0("Estimates obtained from one combined model (only using countries from ECW Africa)\nNo restrictions on beta. Recall period = ", recall_period)) %>%
-  kable_classic()
-
 #beta values for new combined multi-level model
 load("rescreen_1")
 beta_ecw <- rstan::summary(fit, pars = c("beta_ecw"), probs = c(0.025, 0.5, 0.975))$summary
