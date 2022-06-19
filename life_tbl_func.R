@@ -6,13 +6,7 @@ risk_to_rate <- function(risk, time){
   return(rate)
 }
 
-rates <- c(rep(0.98, 3), rep(0.98, 3))
-lower_age <- 30
-upper_age <- 50
-dt <- 0.1
-#View(life_table_ras(rates[1,], lower_age, upper_age, dt))
-
-# life table function with a realistic age structure (ras)
+# life table function with a realistic age structure (ras) and lag
 life_table_ras_lag <- function(rates, 
                            lower_age, upper_age,
                            dt) {
@@ -225,7 +219,7 @@ life_table_ras <- function(rates,
   return(tt_f)
 }
 
-# #function which allows the input of an dataframe or matrix for faster computations
+#function which allows the input of an dataframe or matrix for faster computations
 life_table_ras2 <- function(rates, beta,
                             lower_age, upper_age,
                             dt,
@@ -301,10 +295,6 @@ life_table_ras2 <- function(rates, beta,
   return(f)
 }
 
-# #function which allows the input of an array for faster computations
-#a <- rates
-
-#beta <- array(as.numeric(unlist(beta)), dim = c(nrow(b), ncol(b), 2))
 life_table_ras3 <- function(rates, beta,
                             lower_age, upper_age,
                             dt,
