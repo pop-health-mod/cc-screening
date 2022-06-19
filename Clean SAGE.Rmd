@@ -26,32 +26,12 @@ ghsage <- select(ghsage_raw,
                  weight = pweight,
                  age = q0407,
                  sex = q0406, # 1=male; 2=female
-                 urban_rural = q0104, # 1=urban; 2=rural; 8/9 = DK/NA
-                 edu = q0409,
-                 marital_status = q1012, 
                  #cervical cancer questions
                  last_pelvic_exam = q4078,
                  last_pelvic_exam_pap = q4079)
-#table(ghsage_raw[ghsage_raw$q0406 == 2,]$q0407)
 ghsage$Country <- "Ghana"
 ghsage$Year <- "2007"
 ghsage$df <- "ghsage"
-
-#recode education
-ghsage$edu[ghsage$edu == 0] <- 0 #no schooling
-ghsage$edu[ghsage$edu == 1 | ghsage$edu == 2] <- 1 #primary education
-ghsage$edu[ghsage$edu == 3 | ghsage$edu == 4] <- 2 #secondary education
-ghsage$edu[ghsage$edu == 5 | ghsage$edu == 6] <- 3 #more than secondary schooling
-ghsage$edu[ghsage$edu == 8] <- NA #don't know
-  
-#recode marital_status
-ghsage$marital_status[ghsage$marital_status == 1] <- 0 #never in union
-ghsage$marital_status[ghsage$marital_status == 2] <- 1 #married
-ghsage$marital_status[ghsage$marital_status == 3] <- 2 #cohabiting
-ghsage$marital_status[ghsage$marital_status == 4] <- 4 #separated/divorced
-ghsage$marital_status[ghsage$marital_status == 5] <- 3 #widowed
-ghsage$marital_status[ghsage$marital_status == 8] <- NA #don't know
-ghsage$marital_status[ghsage$marital_status == 9] <- NA #NA
 
 ##cervical cancer questions
 #the problem with these questions is that it misses people who didn't have a pap smear at their last pelvic exam but had one in their second to last or third to last
@@ -78,17 +58,6 @@ sum(table(ghsage$ever_had_pap_smear))
 sum(table(ghsage$pap_smear_past_1y))
 
 ghsage <- filter(ghsage, sex == 2 & !is.na(weight))
-sum(table(ghsage$pap_smear_past_3y))
-sum(table(ghsage_raw[ghsage_raw$q0406 == 2 & ghsage_raw$q0407 >= 15 & ghsage_raw$q0407 <= 19,]$q4078))
-sum(table(ghsage_raw[ghsage_raw$q0406 == 2,]$q4078))
-table(ghsage_raw$q4078)
-table(ghsage_raw$q4079)
-
-#View(ghsage_raw[,c("q4078", "q4079")])
-sum(table(ghsage$ever_had_pap_smear))
-sum(table(ghsage$pap_smear_past_1y))
-table(ghsage$last_pelvic_exam_pap)
-sum(table(ghsage$last_pelvic_exam))
 ```
 ```{r south africa}
 sasage <- select(sasage_raw,
@@ -97,32 +66,12 @@ sasage <- select(sasage_raw,
                  weight = pweight,
                  age = q0407,
                  sex = q0406, # 1=male; 2=female
-                 urban_rural = q0104, # 1=urban; 2=rural; 8/9 = DK/NA
-                 edu = q0409,
-                 marital_status = q1012, 
                  #cervical cancer questions
                  last_pelvic_exam = q4078,
                  last_pelvic_exam_pap = q4079)
-#table(sasage_raw[sasage_raw$q0406 == 2,]$q0407)
 sasage$Country <- "South Africa"
 sasage$Year <- "2007"
 sasage$df <- "sasage"
-
-#recode education
-sasage$edu[sasage$edu == 0] <- 0 #no schooling
-sasage$edu[sasage$edu == 1 | sasage$edu == 2] <- 1 #primary education
-sasage$edu[sasage$edu == 3 | sasage$edu == 4] <- 2 #secondary education
-sasage$edu[sasage$edu == 5 | sasage$edu == 6] <- 3 #more than secondary schooling
-sasage$edu[sasage$edu == 8] <- NA #don't know
-  
-#recode marital_status
-sasage$marital_status[sasage$marital_status == 1] <- 0 #never in union
-sasage$marital_status[sasage$marital_status == 2] <- 1 #married
-sasage$marital_status[sasage$marital_status == 3] <- 2 #cohabiting
-sasage$marital_status[sasage$marital_status == 4] <- 4 #separated/divorced
-sasage$marital_status[sasage$marital_status == 5] <- 3 #widowed
-sasage$marital_status[sasage$marital_status == 8] <- NA #don't know
-sasage$marital_status[sasage$marital_status == 9] <- NA #NA
 
 ##cervical cancer questions
 #the problem with these questions is that it misses people who didn't have a pap smear at their last pelvic exam but had one in their second to last or third to last
@@ -146,18 +95,8 @@ sasage$ever_had_pap_smear[sasage$last_pelvic_exam_pap == 2] <- 0 #this assumes t
 sasage$ever_had_pap_smear[sasage$last_pelvic_exam == 98] <- 0 #this would include people who responded saying they've never had a pelvic exam - i also checked and no ones age is 
 
 sasage <- filter(sasage, sex == 2 & !is.na(weight))
-sum(table(sasage$pap_smear_past_3y))
-sum(table(sasage_raw[sasage_raw$q0406 == 2 & sasage_raw$q0407 >= 15 & sasage_raw$q0407 <= 19,]$q4078))
-sum(table(sasage_raw[sasage_raw$q0406 == 2,]$q4078))
-table(sasage_raw$q4078)
-table(sasage_raw$q4079)
-
-#View(sasage_raw[,c("q4078", "q4079")])
-sum(table(sasage$ever_had_pap_smear))
-sum(table(sasage$pap_smear_past_1y))
-table(sasage$last_pelvic_exam_pap)
-table(sasage$last_pelvic_exam)
 ```
+
 ```{r missing data}
 ghsage_raw <- read_dta("~/Documents/GitHub/HPV-HIV-Model/SAGE/Ghana/GhanaINDData.dta")
 ghsage_raw <- select(ghsage_raw,
@@ -210,6 +149,6 @@ table(ghsage_raw$last_pelvic_exam)
 
 ```{r save}
 save(ghsage, sasage,
-     file = "Cleaned SAGE")
+     file = "New Cleaned SAGE")
 #load("Cleaned SAGE")
 ```
