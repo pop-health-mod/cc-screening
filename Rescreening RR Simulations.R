@@ -125,8 +125,8 @@ model {
       ln_beta_reg ~ normal(ln_beta_overall, sd_beta_overall);
       ln_beta_overall ~ normal(0, 5);
         
-      sd_beta_reg ~ normal(0, 10);
-      sd_beta_overall ~ normal(0, 10) T[0, 100];
+      sd_beta_reg ~ normal(0, 1);
+      sd_beta_overall ~ normal(0, 3);
   
       for(j in 1:n_count_ecw){
         ln_lambda_ecw[,j] ~ normal(log(0.005), 5);
@@ -173,10 +173,9 @@ generated quantities {
 '
 cc_stan_count_combine <- stan_model(model_code = cc_mod_count_combine)
 
-n_age_ecw <- 14
-# n_age_e <- 34
-n_age_s <- 14
-lambda_version <- 3
+n_age_ecw <- 34
+n_age_s <- 34
+lambda_version <- 1
 if (lambda_version == 1) {
   lambda_ecw0 <- exp(log(0.001) + c(1:n_age_ecw) * 0.22 - (c(1:n_age_ecw)^2) * 0.006)
   lambda_ecw1 <- exp(log(0.001) + c(1:n_age_ecw) * 0.22 - (c(1:n_age_ecw)^2) * 0.006) 
@@ -199,9 +198,6 @@ if (lambda_version == 3) {
   lambda_s0 <- exp(log(0.003) + c(1:n_age_s) * 0.2 - (c(1:n_age_s)^2) * 0.006)
   lambda_s1 <- exp(log(0.009) + c(1:n_age_s) * 0.2 - (c(1:n_age_s)^2) * 0.006) }
   
-# plot(lambda0, ylim = c(0, 0.1), type = "l", lwd = 2, col = "steelblue3")
-# lines(lambda1, lwd = 2, col = "steelblue4")
-
 beta_ecw <- c(30, 40, 50)
 # beta_e <- c(15, 20, 25)
 beta_s <- c(1, 5, 10)
@@ -217,17 +213,13 @@ lambda_s <- array(data = NA, dim = c(niter, n_age_s))
 for (a in 1:n_age_ecw) { 
   lambda_ecw[, a] <- seq(lambda_ecw0[a], lambda_ecw1[a], length.out = niter)
 }
-# for (a in 1:n_age_e) { 
-#   lambda_e[, a] <- seq(lambda_e0[a], lambda_e1[a], length.out = niter)
-# }
 for (a in 1:n_age_s) {
   lambda_s[, a] <- seq(lambda_s0[a], lambda_s1[a], length.out = niter)
 }
 
 a <- n_yr - 5
-# lambda_ecw[a:(a+2),] <- lambda_ecw[a:(a+2),]*2
-# # lambda_e[a:(a+2),] <- lambda_e[a:(a+2),]*2
-# lambda_s[a:(a+2),] <- lambda_s[a:(a+2),]*2
+lambda_ecw[a:(a+2),] <- lambda_ecw[a:(a+2),]*2
+lambda_s[a:(a+2),] <- lambda_s[a:(a+2),]*2
 
 library(ggplot2)
 time_yr <- time[time %in% seq(1, n_yr, 1)]
@@ -257,11 +249,6 @@ X_ecw <- array(data = 0, dim = c(niter, n_age_ecw, 3, length(beta_ecw)),
                            c("nvr", "evr", "pyr")))  
 X_ecw[1, , "nvr",] <- 1
 
-# X_e <- array(data = 0, dim = c(niter, n_age_e, 3, length(beta_e)), 
-#                dimnames = list(c(1:niter), c(1:n_age_e + 14), 
-#                                c("nvr", "evr", "pyr")))  
-# X_e[1, , "nvr",] <- 1
-
 X_s <- array(data = 0, dim = c(niter, n_age_s, 3, length(beta_s)), 
                dimnames = list(c(1:niter), c(1:n_age_s + 14), 
                                c("nvr", "evr", "pyr"))) 
@@ -271,10 +258,6 @@ X <- list(X_ecw, X_s)
 lambda <- list(lambda_ecw, lambda_s)
 beta <- list(beta_ecw, beta_s)
 n_age <- list(n_age_ecw, n_age_s)
-
-# for(a in 2:n_age){
-#   X[1, a, "nvr"] <- X[1, a-1, "nvr"] + dt * (- lambda[i, a-1] * X[1, a-1, "nvr"])   
-# }
 
 for(r in 1:length(X)){
   for (i in 2:niter) {
@@ -338,7 +321,7 @@ for(r in 1:length(X)){
 
 #figures for screening in past year and lifetime
 par(mfrow = c(1, 1), mar = c(5, 5, 1, 1))
-age <- c(15:28) + 0.1
+age <- c(15:48) + 0.1
 plot(list_sim_country_ecw[[1]]$est_evr ~ age, type = "p", pch = 19, ylim = c(0, 1), col = "royalblue3",
      yaxt = "n", xlab = "Age", ylab = "Proportion Screened in Lifetime", lwd = 1.5, axes = T, cex.axis = 1.5, cex.lab = 1.5)
 points(list_sim_country_s[[1]]$est_evr ~ age, pch = 19, col = "violetred3")
@@ -364,21 +347,15 @@ points(list_sim_country_s[[1]]$est_pyr ~ list_sim_country_s[[1]]$age, pch = 19 ,
 points(list_sim_country_s[[2]]$est_pyr ~ list_sim_country_s[[2]]$age, pch = 19 , col = "tomato3")
 points(list_sim_country_s[[3]]$est_pyr ~ list_sim_country_s[[3]]$age, pch = 19 , col = "violetred1")
 axis(2, at = seq(0, 0.3, by = 0.05), cex.axis = 1.5)
-legend("topleft", legend = c("True", paste("Region 1: Beta", beta_ecw[1]), paste("Region 1: Beta", beta_ecw[2]), paste("Region 1: Beta", beta_ecw[3]), paste("Region 2: Beta", beta_s[1]), paste("Region 2: Beta", beta_s[2]), paste("Region 2: Beta", beta_s[3])),
+legend("topleft", legend = c("True", paste("Region 1: Phi", beta_ecw[1]), paste("Region 1: Phi", beta_ecw[2]), paste("Region 1: Phi", beta_ecw[3]), paste("Region 2: Phi", beta_s[1]), paste("Region 2: Phi", beta_s[2]), paste("Region 2: Phi", beta_s[3])),
        pch = c(NA, rep(21, 7)), lwd = c(1.5, rep(NA, 7)), 
        col = c("cornsilk4", "royalblue4", "steelblue2", "royalblue1", "violetred4", "tomato3", "violetred1"), cex = 1.5,
        pt.bg = c(NA, "royalblue4", "steelblue2", "royalblue1", "violetred4", "tomato3", "violetred1"), bty = "n")
 
-# sim <- subset(sim, age >= 20 & age < 45)  
 ind_obs_ecw <- which(!is.na(list_sim_country_ecw[[1]]$ever_previous)) - 1
 n_obs_ecw <- length(ind_obs_ecw)
 n_count_ecw <- length(beta_ecw)
 svy_evr_num_ecw <- svy_evr_den_ecw <- svy_pyr_num_ecw <- svy_pyr_den_ecw <- svy_ever_ecw <- matrix(0, n_obs_ecw, n_count_ecw)
-
-# ind_obs_e <- which(!is.na(list_sim_country_e[[1]]$ever_previous)) - 1
-# n_obs_e <- length(ind_obs_e)
-# n_count_e <- length(beta_e)
-# svy_evr_num_e <- svy_evr_den_e <- svy_pyr_num_e <- svy_pyr_den_e <- svy_ever_e <- matrix(0, n_obs_e, n_count_e)
 
 ind_obs_s <- which(!is.na(list_sim_country_s[[1]]$ever_previous)) - 1
 n_obs_s <- length(ind_obs_s)
@@ -396,18 +373,6 @@ for(i in 1:n_count_ecw){
   init_val <- c(1 - list_sim_country_ecw[[i]]$num_evr[1], list_sim_country_ecw[[i]]$num_evr[1] - list_sim_country_ecw[[i]]$est_pyr[1], list_sim_country_ecw[[i]]$est_pyr[1])
   if (!identical(sum(init_val), 1)) { "stop - initial values inconsistent" }
 }
-
-# for(i in 1:n_count_e){
-#   list_sim_country_e[[i]] <- na.omit(list_sim_country_e[[i]])
-#   svy_evr_num_e[,i] <- list_sim_country_e[[i]]$num_evr[ind_obs_e]
-#   svy_evr_den_e[,i] <- list_sim_country_e[[i]]$den[ind_obs_e]
-#   svy_pyr_num_e[,i] <- list_sim_country_e[[i]]$num_pyr[ind_obs_e]
-#   svy_pyr_den_e[,i] <- list_sim_country_e[[i]]$den[ind_obs_e]
-#   svy_ever_e[,i] <- list_sim_country_e[[i]]$ever_previous
-#   
-#   init_val <- c(1 - list_sim_country_e[[i]]$num_evr[1], list_sim_country_e[[i]]$num_evr[1] - list_sim_country_e[[i]]$est_pyr[1], list_sim_country_e[[i]]$est_pyr[1])
-#   if (!identical(sum(init_val), 1)) { "stop - initial values inconsistent" }
-# }
 
 for(i in 1:n_count_s){
   list_sim_country_s[[i]] <- na.omit(list_sim_country_s[[i]])
@@ -429,14 +394,6 @@ data_stan <- list(ind_obs_ecw = ind_obs_ecw,
                   svy_pyr_num_ecw = svy_pyr_num_ecw,
                   svy_pyr_den_ecw = svy_pyr_den_ecw,
                   svy_ever_ecw = svy_ever_ecw,
-                  # ind_obs_e = ind_obs_e,
-                  # n_obs_e = n_obs_e,
-                  # n_count_e = n_count_e,
-                  # svy_evr_num_e = svy_evr_num_e,
-                  # svy_evr_den_e = svy_evr_den_e,
-                  # svy_pyr_num_e = svy_pyr_num_e,
-                  # svy_pyr_den_e = svy_pyr_den_e,
-                  # svy_ever_e = svy_ever_e,
                   ind_obs_s = ind_obs_s,
                   n_obs_s = n_obs_s,
                   n_count_s = n_count_s,
@@ -451,13 +408,16 @@ data_stan <- list(ind_obs_ecw = ind_obs_ecw,
 rstan_options(auto_write = TRUE)
 
 options(mc.cores = parallel::detectCores())
-fit <- sampling(cc_stan_count_combine, data = data_stan, iter = 1000, chains = 4, refresh = 100,
-                warmup = 500, thin = 1, control = list(adapt_delta = 0.999, max_treedepth = 20))
+fit <- sampling(cc_stan_count_combine, data = data_stan, iter = 7000, chains = 4, refresh = 100,
+                warmup = 3500, thin = 1, control = list(adapt_delta = 0.999, stepsize = 0.01, max_treedepth = 15))
 #save(X, lambda, beta, n_age, data_stan, fit, cc_stan_count_combine, file = "retest_sim_three_reg")
-# rstan::summary(fit, pars = c("beta_ecw", "beta_s", "beta_overall", "beta_reg"), probs = c(0.025, 0.5, 0.975))$summary
-# rstan::summary(fit, pars = c("sd_beta_overall", "sd_beta_reg"), probs = c(0.025, 0.5, 0.975))$summary
-# View(rstan::summary(fit, probs = c(0.025, 0.5, 0.975))$summary)
-# rstan::summary(fit, pars = c("beta", "lambda", "sd_rw"), probs = c(0.025, 0.5, 0.975))$summary
+rstan::summary(fit, pars = c("beta_ecw", "beta_s", "beta_overall", "beta_reg"), probs = c(0.025, 0.5, 0.975))$summary
+rstan::summary(fit, pars = c("sd_beta_overall", "sd_beta_reg"), probs = c(0.025, 0.5, 0.975))$summary
+rstan::summary(fit, probs = c(0.025, 0.5, 0.975))$summary
+rstan::stan_trace(fit, pars = c("beta_ecw", "beta_s", "beta_overall", "beta_reg"))
+rstan::stan_trace(fit, pars = c("sd_beta_overall", "sd_beta_reg"))
+View(rstan::summary(fit, probs = c(0.025, 0.5, 0.975))$summary)
+rstan::summary(fit, pars = c("beta", "lambda", "sd_rw"), probs = c(0.025, 0.5, 0.975))$summary
 
 draws <- rstan::extract(fit)
 prd_evr_ecw <- prd_pyr_ecw <- lambda_est_ecw <- rate_ecw <- NULL
@@ -501,51 +461,6 @@ for(i in 1:2){
   re_test_reg[i,] <- round(data.frame(t(quantile(draws$beta_reg[,i], probs = c(0.025, 0.5, 0.975))), Country = i), 2)
   rate_reg[i] <- paste0(re_test_reg[i,2], " (", re_test_reg[i,1], "-", re_test_reg[i,3], ")")
 }
-beta_ecw; beta_s
-
-# c_eff_s2_ecw_no_p_eff <- data.frame(beta = c(beta_ecw, "overall"),
-#                       rate = c(rate_ecw, rate_reg[1]),
-#                        p_eff = "No",
-#                        n_yr)
-# 
-# 
-# c_eff_s2_s_no_p_eff <- data.frame(beta = c(beta_s, "overall"),
-#                            rate = c(rate_s, rate_reg[2]),
-#                            p_eff = "No",
-#                            n_yr)
-# 
-# c_eff_s2_ecw_p_eff_s1 <- data.frame(beta = c(beta_ecw, "overall"),
-#                               rate = c(rate_ecw, rate_reg[1]),
-#                               p_eff = "s1",
-#                               n_yr)
-# 
-# 
-# c_eff_s2_s_p_eff_s1 <- data.frame(beta = c(beta_s, "overall"),
-#                             rate = c(rate_s, rate_reg[2]),
-#                             p_eff = "s1",
-#                             n_yr)
-# 
-# c_eff_s2_ecw_p_eff_s2 <- data.frame(beta = c(beta_ecw, "overall"),
-#                                     rate = c(rate_ecw, rate_reg[1]),
-#                                     p_eff = "s2",
-#                                     n_yr)
-# 
-# 
-# c_eff_s2_s_p_eff_s2 <- data.frame(beta = c(beta_s, "overall"),
-#                                   rate = c(rate_s, rate_reg[2]),
-#                                   p_eff = "s2",
-#                                   n_yr)
-# 
-# c_eff_s2_ecw_50 <- rbind(c_eff_s2_ecw_no_p_eff, 
-#                          c_eff_s2_ecw_p_eff_s1,
-#                          c_eff_s2_ecw_p_eff_s2)
-# 
-# c_eff_s2_s_50 <- rbind(c_eff_s2_s_no_p_eff, 
-#                          c_eff_s2_s_p_eff_s1,
-#                          c_eff_s2_s_p_eff_s2)
-# 
-# View(c_eff_s2_ecw_50)
-# View(c_eff_s2_s_50)
 
 df_prd_evr_ecw <- prd_evr_ecw[[1]]
 df_prd_pyr_ecw <- prd_pyr_ecw[[1]]
@@ -573,17 +488,17 @@ age4 <- list_sim_country_ecw[[1]]$age + 0.3
 age5 <- list_sim_country_ecw[[1]]$age + 0.4
 age6 <- list_sim_country_ecw[[1]]$age + 0.5
 
-plot(lambda_ecw[niter - 1 / dt, ] ~ I(c(16:29)), type = "l", ylim = c(0, 0.07), yaxt = "n", 
+plot(lambda_ecw[niter - 1 / dt, ] ~ I(c(16:49)), type = "l", ylim = c(0, 0.06), yaxt = "n", 
      xlab = "Age", ylab = "Initial Screening Rate", col = "lightblue", lwd = 3, axes = T, 
      cex.axis = 1.5, cex.lab = 1.5)
-lines(lambda_s[niter - 1 / dt, ] ~ I(c(16:29)), col = "lightpink", lwd = 3)
+lines(lambda_s[niter - 1 / dt, ] ~ I(c(16:49)), col = "lightpink", lwd = 3)
 points(lambda_est_ecw[[1]]$`50%` ~ age1, pch = 19, col = "royalblue4", cex = 0.5)
 points(lambda_est_ecw[[2]]$`50%` ~ age2, pch = 19, col = "steelblue3", cex = 0.5)
 points(lambda_est_ecw[[3]]$`50%` ~ age3, pch = 19, col = "royalblue1", cex = 0.5)
 points(lambda_est_s[[1]]$`50%` ~ age4, pch = 19, col = "violetred4", cex = 0.5)
 points(lambda_est_s[[2]]$`50%` ~ age5, pch = 19, col = "tomato3", cex = 0.5)
 points(lambda_est_s[[3]]$`50%` ~ age6, pch = 19, col = "violetred1", cex = 0.5)
-axis(2, at = seq(0, 0.07, by = 0.01), cex.axis = 1.5)
+axis(2, at = seq(0, 0.06, by = 0.01), cex.axis = 1.5)
 segments(x0 = age1, x1 = age1, 
          y0 = lambda_est_ecw[[1]]$`2.5%`, y1 = lambda_est_ecw[[1]]$`97.5%`, col = "royalblue4")
 segments(x0 = age2, x1 = age2, 
@@ -596,7 +511,7 @@ segments(x0 = age5, x1 = age5,
          y0 = lambda_est_s[[2]]$`2.5%`, y1 = lambda_est_s[[2]]$`97.5%`, col = "tomato3")
 segments(x0 = age6, x1 = age6, 
          y0 = lambda_est_s[[3]]$`2.5%`, y1 = lambda_est_s[[3]]$`97.5%`, col = "violetred1")
-legend("topleft", legend = c("True", paste("Beta", beta_ecw[1]), paste("Beta", beta_ecw[2]), paste("Beta", beta_ecw[3]), paste("Beta", beta_s[1]), paste("Beta", beta_s[2]), paste("Beta", beta_s[3])),
+legend("topleft", legend = c("True", paste("Phi", beta_ecw[1]), paste("Phi", beta_ecw[2]), paste("Phi", beta_ecw[3]), paste("Phi", beta_s[1]), paste("Phi", beta_s[2]), paste("Phi", beta_s[3])),
        pch = c(NA, rep(21, 7)), lwd = c(1.5, rep(NA, 7)), 
        col = c("cornsilk4", "royalblue4", "steelblue2", "royalblue1", "violetred4", "tomato3", "violetred1"), cex = 1.5,
        pt.bg = c(NA, "royalblue4", "steelblue2", "royalblue1", "violetred4", "tomato3", "violetred1"), bty = "n")
@@ -604,23 +519,23 @@ legend("topleft", legend = c("True", paste("Beta", beta_ecw[1]), paste("Beta", b
 sim_beta_ecw <- re_test_ecw[,2]
 sim_beta_ecw_l <- re_test_ecw[,1]
 sim_beta_ecw_u <- re_test_ecw[,3]
-df_beta_ecw <- data.frame(Country = rep(c(paste("Beta", beta_ecw[1]), paste("Beta", beta_ecw[2]), paste("Beta", beta_ecw[3])), 2),
+df_beta_ecw <- data.frame(Country = rep(c(paste("Phi", beta_ecw[1]), paste("Phi", beta_ecw[2]), paste("Phi", beta_ecw[3])), 2),
                       name = c(rep("True", 3), rep("Modelled", 3)), 
                       val = c(beta_ecw, sim_beta_ecw),
                       lower = c(rep(NA, 3), sim_beta_ecw_l),
                       upper = c(rep(NA, 3), sim_beta_ecw_u))
-df_beta_ecw$Country = factor(df_beta_ecw$Country, levels = c(paste("Beta", beta_ecw[1]), paste("Beta", beta_ecw[2]), paste("Beta", beta_ecw[3])))
+df_beta_ecw$Country = factor(df_beta_ecw$Country, levels = c(paste("Phi", beta_ecw[1]), paste("Phi", beta_ecw[2]), paste("Phi", beta_ecw[3])))
 df_beta_ecw$Region <- "Region 1"
 
 sim_beta_s <- re_test_s[,2]
 sim_beta_s_l <- re_test_s[,1]
 sim_beta_s_u <- re_test_s[,3]
-df_beta_s <- data.frame(Country = rep(c(paste("Beta", beta_s[1]), paste("Beta", beta_s[2]), paste("Beta", beta_s[3])), 2),
+df_beta_s <- data.frame(Country = rep(c(paste("Phi", beta_s[1]), paste("Phi", beta_s[2]), paste("Phi", beta_s[3])), 2),
                           name = c(rep("True", 3), rep("Modelled", 3)), 
                           val = c(beta_s, sim_beta_s),
                           lower = c(rep(NA, 3), sim_beta_s_l),
                           upper = c(rep(NA, 3), sim_beta_s_u))
-df_beta_s$Country = factor(df_beta_s$Country, levels = c(paste("Beta", beta_s[1]), paste("Beta", beta_s[2]), paste("Beta", beta_s[3])))
+df_beta_s$Country = factor(df_beta_s$Country, levels = c(paste("Phi", beta_s[1]), paste("Phi", beta_s[2]), paste("Phi", beta_s[3])))
 df_beta_s$Region <- "Region 2"
 
 df_beta <- rbind(df_beta_s, df_beta_ecw)
@@ -630,6 +545,7 @@ ggplot(df_beta, aes(x = Country, y = val, fill = name)) +
   geom_errorbar(aes(ymin = lower, ymax = upper), position = position_dodge(0.5), width = 0.4) +
   ylab("Rate Ratio")  +
   ylim(0, 85) +
+  #scale_y_continuous(breaks = seq(0, 90, by = 20)) + 
   theme_bw() +
   theme(panel.grid.major.x = element_blank(),
         axis.title.x = element_blank(),
