@@ -18,20 +18,17 @@ library(dplyr)
 library(survey)
 library(ggplot2)
 library(readxl)
-source("df_functions.R")
+source("df_functions.R") #functions created for dataframes
+load("Cleaned Indv Surveys") #from Combine Clean Surveys.Rmd
+load("Cleaned Pooled Surveys") #from Combine Clean Surveys.Rmd
 
-load("Cleaned Pooled Surveys")
-load("Cleaned Indv Surveys")
 surveys <- read_excel("surveys.xlsx", sheet = 1)
 all_q <- read_excel("surveys.xlsx", sheet = 2)
-
-pooled_surveys1 <- pooled_surveys
-pooled_surveys1$weight <- 1
 ```
 
 # Proportion cc tested ever
 ```{r age settings}
-age.groups <- data.frame(c(15, 18, 15, 25, 30, 50, seq(15, 65, 5), 0), c(49, 49, 29, 49, 49, 1000, seq(19, 64, 5), 1000, 1000))
+agegr <- data.frame(c(15, 18, 15, 25, 30, 50, seq(15, 65, 5), 0), c(49, 49, 29, 49, 49, 1000, seq(19, 64, 5), 1000, 1000))
 df <- data.frame(agegr = c("15-49", "18-49", "15-29", "25-49", "30-49", "50-65+", 
                                 "15-19", "20-24", "25-29", "30-34", "35-39", 
                                 "40-44", "45-49", "50-54", "55-59", "60-64", "65-1000", "All"))
@@ -42,7 +39,7 @@ options(survey.lonely.psu="adjust")
 evercctested <- function(df, age1, age2){
   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested))
   
-  if(nrow(sub_df) <= 1){
+  if(nrow(sub_df) <= 1){ #done for age groups that have 1 or less people
     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
     
   }else{
@@ -66,12 +63,12 @@ evercctested <- function(df, age1, age2){
 everhadpapsmear <- function(df, age1, age2){
   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear))
   
-  if(nrow(sub_df) <= 1){
+  if(nrow(sub_df) <= 1){ #done for age groups that have 1 or less people
     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
     
   }else{
      if(length(sub_df$strata) != 0){
-      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu, strata = ~strata, nest = T) #may need to add strata
+      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu, strata = ~strata, nest = T)
       m <- svyciprop(~ever_had_pap_smear, design = design)
       ci <- confint(m)
   
@@ -86,67 +83,67 @@ everhadpapsmear <- function(df, age1, age2){
   }
 }
 ```
-```{r dhs1}
+```{r dhs}
 #Benin
-evercctested_bndhs <- df_age_fig(age.groups, bndhs, evercctested, df)
+evercctested_bndhs <- df_age_fig(agegr, bndhs, evercctested, df)
 evercctested_bndhs$df <- "bndhs"
 
 #Cote d'Ivoire
-evercctested_cidhs <- df_age_fig(age.groups, cidhs, evercctested, df)
+evercctested_cidhs <- df_age_fig(agegr, cidhs, evercctested, df)
 evercctested_cidhs$df <- "cidhs"
 
 #Cameroon
-evercctested_cmdhs <- df_age_fig(age.groups, cmdhs, evercctested, df)
+evercctested_cmdhs <- df_age_fig(agegr, cmdhs, evercctested, df)
 evercctested_cmdhs$df <- "cmdhs"
 
 #Kenya
-evercctested_kedhs <- df_age_fig(age.groups, kedhs, evercctested, df)
+evercctested_kedhs <- df_age_fig(agegr, kedhs, evercctested, df)
 evercctested_kedhs$df <- "kedhs"
 
-everhadpapsmear_kedhs <- df_age_fig(age.groups, kedhs, everhadpapsmear, df)
+everhadpapsmear_kedhs <- df_age_fig(agegr, kedhs, everhadpapsmear, df)
 everhadpapsmear_kedhs$df <- "kedhs"
 
 #Lesotho
-everhadpapsmear_ls9dhs <- df_age_fig(age.groups, ls9dhs, everhadpapsmear, df)
+everhadpapsmear_ls9dhs <- df_age_fig(agegr, ls9dhs, everhadpapsmear, df)
 everhadpapsmear_ls9dhs$df <- "ls9dhs"
 
-everhadpapsmear_ls14dhs <- df_age_fig(age.groups, ls14dhs, everhadpapsmear, df)
+everhadpapsmear_ls14dhs <- df_age_fig(agegr, ls14dhs, everhadpapsmear, df)
 everhadpapsmear_ls14dhs$df <- "ls14dhs"
 
 #Namibia
 nm0dhs <- filter(nm0dhs, !is.na(weight) & weight != 0)
 
-everhadpapsmear_nm0dhs <- df_age_fig(age.groups, nm0dhs, everhadpapsmear, df)
+everhadpapsmear_nm0dhs <- df_age_fig(agegr, nm0dhs, everhadpapsmear, df)
 everhadpapsmear_nm0dhs$df <- "nm0dhs"
 
 nm13dhs <- filter(nm13dhs, !is.na(weight) & weight != 0)
 
-evercctested_nm13dhs <- df_age_fig(age.groups, nm13dhs, evercctested, df)
+evercctested_nm13dhs <- df_age_fig(agegr, nm13dhs, evercctested, df)
 evercctested_nm13dhs$df <- "nm13dhs"
 
-everhadpapsmear_nm13dhs <- df_age_fig(age.groups, nm13dhs, everhadpapsmear, df)
+everhadpapsmear_nm13dhs <- df_age_fig(agegr, nm13dhs, everhadpapsmear, df)
 everhadpapsmear_nm13dhs$df <- "nm13dhs"
 
 #South Africa
-everhadpapsmear_sadhs <- df_age_fig(age.groups, sadhs, everhadpapsmear, df)
+everhadpapsmear_sadhs <- df_age_fig(agegr, sadhs, everhadpapsmear, df)
 everhadpapsmear_sadhs$df <- "sadhs"
 
 #Zimbabwe
-evercctested_zwdhs <- df_age_fig(age.groups, zwdhs, evercctested, df)
+evercctested_zwdhs <- df_age_fig(agegr, zwdhs, evercctested, df)
 evercctested_zwdhs$df <- "zwdhs"
 ```
-```{r kais1}
-evercctested_kais <- df_age_fig(age.groups, kais, evercctested, df)
+```{r kais}
+evercctested_kais <- df_age_fig(agegr, kais, evercctested, df)
 evercctested_kais$df <- "kais"
 ```
-```{r phia1}
+```{r phia}
 evercctested_phia_list <- list(NA)
 evercctested_phia <- data.frame(df = NA, agegr = NA)
 phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
 
 n = 1
 for(i in 1:length(phia_list)){
-  df <- df_age_fig(age.groups, phia_list[[i]], evercctested, df)
+  df <- df_age_fig(agegr, phia_list[[i]], evercctested, df)
   evercctested_phia_list[[i]] <- df
   evercctested_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
   evercctested_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
@@ -157,76 +154,69 @@ for(i in 1:length(phia_list)){
   n = n+nrow(df)
 }
 ```
-```{r sabssm1}
+```{r sabssm}
 #South Africa
-everhadpapsmear_sabssm <- df_age_fig(age.groups, sabssm, everhadpapsmear, df)
+everhadpapsmear_sabssm <- df_age_fig(agegr, sabssm, everhadpapsmear, df)
 everhadpapsmear_sabssm$df <- "sabssm"
 ```
-```{r sage1}
+```{r sage}
 #Ghana
-everhadpapsmear_ghsage <- df_age_fig(age.groups, ghsage, everhadpapsmear, df)
+everhadpapsmear_ghsage <- df_age_fig(agegr, ghsage, everhadpapsmear, df)
 everhadpapsmear_ghsage$df <- "ghsage"
 
 #South Africa
-everhadpapsmear_sasage <- df_age_fig(age.groups, sasage, everhadpapsmear, df)
+everhadpapsmear_sasage <- df_age_fig(agegr, sasage, everhadpapsmear, df)
 everhadpapsmear_sasage$df <- "sasage"
 ```
-```{r steps1}
+```{r steps}
 #benin
-evercctested_bnsteps <- df_age_fig(age.groups, bnsteps, evercctested, df)
+evercctested_bnsteps <- df_age_fig(agegr, bnsteps, evercctested, df)
 evercctested_bnsteps$df <- "bnsteps"
 
 #botswana
-evercctested_btsteps <- df_age_fig(age.groups, btsteps, evercctested, df)
+evercctested_btsteps <- df_age_fig(agegr, btsteps, evercctested, df)
 evercctested_btsteps$df <- "btsteps"
 
 #cape verde
-evercctested_cpvsteps <- df_age_fig(age.groups, cpvsteps, evercctested, df)
+evercctested_cpvsteps <- df_age_fig(agegr, cpvsteps, evercctested, df)
 evercctested_cpvsteps$df <- "cpvsteps"
 
 #ethiopia
-evercctested_ethsteps <- df_age_fig(age.groups, ethsteps, evercctested, df)
+evercctested_ethsteps <- df_age_fig(agegr, ethsteps, evercctested, df)
 evercctested_ethsteps$df <- "ethsteps"
 
 #kenya
-evercctested_knsteps <- df_age_fig(age.groups, knsteps, evercctested, df)
+evercctested_knsteps <- df_age_fig(agegr, knsteps, evercctested, df)
 evercctested_knsteps$df <- "knsteps"
 
 #malawi
-evercctested_mlsteps <- df_age_fig(age.groups, mlsteps, evercctested, df)
+evercctested_mlsteps <- df_age_fig(agegr, mlsteps, evercctested, df)
 evercctested_mlsteps$df <- "mlsteps"
 
 #senegal
 snsteps1 <- snsteps
 snsteps1$age <- factor(snsteps1$agegr, levels = c("18-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65-69"), labels = c(21, 27, 32, 37, 42, 47, 52, 57, 62, 67)) #doing this to allow the values to work with the function
 snsteps1$age <- as.numeric(as.character(snsteps1$age))
-evercctested_snsteps <- df_age_fig(age.groups, snsteps1, evercctested, df)
+evercctested_snsteps <- df_age_fig(agegr, snsteps1, evercctested, df)
 evercctested_snsteps$df <- "snsteps"
 
 #sao tome and principe
-evercctested_stpsteps <- df_age_fig(age.groups, stpsteps, evercctested, df)
+evercctested_stpsteps <- df_age_fig(agegr, stpsteps, evercctested, df)
 evercctested_stpsteps$df <- "stpsteps"
 
 #swaziland
-evercctested_szsteps <- df_age_fig(age.groups, szsteps, evercctested, df)
+evercctested_szsteps <- df_age_fig(agegr, szsteps, evercctested, df)
 evercctested_szsteps$df <- "szsteps"
 
 #Uganda
-evercctested_ugsteps <- df_age_fig(age.groups, ugsteps, evercctested, df)
+evercctested_ugsteps <- df_age_fig(agegr, ugsteps, evercctested, df)
 evercctested_ugsteps$df <- "ugsteps"
 
 #Zambia
-evercctested_zmsteps <- df_age_fig(age.groups, zmsteps, evercctested, df)
+evercctested_zmsteps <- df_age_fig(agegr, zmsteps, evercctested, df)
 evercctested_zmsteps$df <- "zmsteps"
 ```
-```{r pooled1}
-evercctested_pooled <- df_age_fig(age.groups, pooled_surveys1, evercctested, df)
-everhadpapsmear_pooled <- df_age_fig(age.groups, pooled_surveys1, everhadpapsmear, df)
-
-evercctested_pooled$df <- "pooled"
-everhadpapsmear_pooled$df <- "pooled"
-```
-```{r combine1}
+```{r combine}
 evercctested_df <- rbind(evercctested_bndhs,
                          evercctested_cidhs,
                          evercctested_cmdhs,
@@ -245,7 +235,6 @@ evercctested_df <- rbind(evercctested_bndhs,
                          evercctested_szsteps,
                          evercctested_ugsteps,
                          evercctested_zmsteps)
-                         # evercctested_pooled)
 evercctested_df$Type <- "General CC Test"
 
 everhadpapsmear_df <- rbind(everhadpapsmear_kedhs,
@@ -280,32 +269,16 @@ evertest_df <- rbind(evercctested_bndhs,
                          everhadpapsmear_ls14dhs,
                          everhadpapsmear_sadhs,
                          everhadpapsmear_sabssm) #Lesotho and namibia pap smear data isn't included in this df
-                         #everhadpapsmear_pooled) 
-
 evertest_df <- left_join(evertest_df, surveys)
-# evertest_df[evertest_df$Age.Groups == "30-49",]
 ```
 ```{r add new surveys}
-new_surveys <- rbind(everhadpapsmear_ghsage, everhadpapsmear_sasage)
-new_surveys <- left_join(new_surveys, select(surveys, -"microdata"))
-evertest_df <- rbind(evertest_df, new_surveys)
+# new_surveys <- rbind(everhadpapsmear_ghsage, everhadpapsmear_sasage)
+# new_surveys <- left_join(new_surveys, select(surveys, -"microdata"))
+# evertest_df <- rbind(evertest_df, new_surveys)
 ```
 
-```{r plots1 all SSA, fig.height = 9}
-ggplot(evertest_df[!is.na(evertest_df$Country),], aes(x = Year, y = Mean, shape = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black", aes(lty = Age.Groups)) +
-  geom_point(aes(colour = Country)) +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC ever among all women\n(includes data from both general CC testing and pap smear only)") +
-  #scale_linetype_manual(values = c("solid", "dotted", "dashed")) +
-  #scale_shape_manual(values = c(16, 1, 3)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm')) + 
-  facet_wrap(~Age.Groups)
-```
-
-```{r plots1 country trends, fig.height = 9}
-ggplot(evertest_df[!is.na(evertest_df$Country) & evertest_df$Age.Group == "All",], aes(x = Year, y = Mean, colour = Region)) +
+```{r plots by Country}
+ggplot(evertest_df[!is.na(evertest_df$Country) & evertest_df$agegr == "All",], aes(x = Year, y = Mean, colour = Region)) +
   geom_smooth(method = lm) +
   geom_point() +
   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5) +
@@ -315,32 +288,8 @@ ggplot(evertest_df[!is.na(evertest_df$Country) & evertest_df$Age.Group == "All",
   facet_wrap(~Country)
 ```
 
-```{r, fig.height = 9}
-ggplot(evertest_df[!is.na(evertest_df$Country) & evertest_df$Type == "General CC Test",], aes(x = Year, y = Mean, shape = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black", aes(lty = Age.Groups)) +
-  geom_point(aes(colour = Country)) +
-  #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC ever among all women\n(excludes those who've reported pap smear only)") +
-  scale_linetype_manual(values = c("solid", "dotted", "dashed")) +
-  scale_shape_manual(values = c(16, 1, 3)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r}
-ggplot(evertest_df[!is.na(evertest_df$Country) & evertest_df$Type == "Pap Smear",], aes(x = Year, y = Mean, shape = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black", aes(lty = Age.Groups)) +
-  geom_point(aes(colour = Country)) +
-  #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear ever among all women\n(excludes those who've reported pap smear only)") +
-  scale_linetype_manual(values = c("solid", "dotted", "dashed")) +
-  scale_shape_manual(values = c(16, 1, 3)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r plots1 by region, fig.height = 9}
-ggplot(evertest_df[!is.na(evertest_df$Country),], aes(x = Year, y = Mean, shape = Age.Groups, lty = Age.Groups)) +
+```{r plots by Region}
+ggplot(evertest_df[!is.na(evertest_df$Country),], aes(x = Year, y = Mean, shape = agegr, lty = agegr)) +
   geom_smooth(method = lm, colour = "black") +
   geom_point(aes(colour = Country)) +
   #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
@@ -351,927 +300,6 @@ ggplot(evertest_df[!is.na(evertest_df$Country),], aes(x = Year, y = Mean, shape 
   scale_shape_manual(values = c(16, 1)) +
   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
 ```
-
-```{r, fig.height = 9}
-ggplot(evertest_df[!is.na(evertest_df$Country) & evertest_df$Type == "General CC Test",], aes(x = Year, y = Mean, shape = Age.Groups, lty = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black") +
-  geom_point(aes(colour = Country)) +
-  #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  facet_wrap(~Region) + 
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC ever among all women\n(excludes those who've reported pap smear only)") +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_shape_manual(values = c(16, 1)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r, fig.height = 9}
-ggplot(evertest_df[!is.na(evertest_df$Country) & evertest_df$Type == "Pap Smear",], aes(x = Year, y = Mean, shape = Age.Groups, lty = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black") +
-  geom_point(aes(colour = Country)) +
-  #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  facet_wrap(~Region) + 
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear ever among all women") +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_shape_manual(values = c(16, 1)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-# Proportion cc tested ever by geotype
-```{r prop tested ever by geography function}
-#function for general cc testing
-urban_evercctested <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested) & !is.na(urban_rural))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_cc_tested, ~urban_rural, svyciprop, design = design)
-    ci <- confint(m)
-    
-    results <- data.frame(Geotype = c("Urban", "Rural"), Prop = m[,2], Lower = ci[,1], Upper = ci[,2])
-  
-    return(results)
-  }
-}
-
-#function for pap smear
-urban_everhadpapsmear <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear) & !is.na(urban_rural))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_had_pap_smear, ~urban_rural, svyciprop, design = design)
-    ci <- confint(m)
-    
-    results <- data.frame(Geotype = c("Urban", "Rural"), Prop = m[,2], Lower = ci[,1], Upper = ci[,2])
-  
-    return(results)
-  }
-}
-```
-```{r dhs2}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-urban_evercctested_bndhs <- urban_evercctested(bndhs, 18, 49)
-urban_evercctested_bndhs$df <- "bndhs"
-
-#Lesotho
-urban_everhadpapsmear_ls9dhs <- urban_everhadpapsmear(ls9dhs, 18, 49)
-urban_everhadpapsmear_ls9dhs$df <- "ls9dhs"
-
-urban_everhadpapsmear_ls14dhs <- urban_everhadpapsmear(ls14dhs, 18, 49)
-urban_everhadpapsmear_ls14dhs$df <- "ls14dhs"
-
-#Namibia
-urban_evercctested_nm13dhs <- df_age_fig(age.groups, nm13dhs, urban_evercctested, df)
-urban_evercctested_nm13dhs$df <- "nm13dhs"
-
-urban_everhadpapsmear_nm13dhs <- df_age_fig(age.groups, nm13dhs, urban_everhadpapsmear, df)
-urban_everhadpapsmear_nm13dhs$df <- "nm13dhs"
-
-#South Africa
-urban_everhadpapsmear_sadhs <- urban_everhadpapsmear(sadhs, 18, 49)
-urban_everhadpapsmear_sadhs$df <- "sadhs"
-
-#Zimbabwe
-urban_evercctested_zwdhs <- urban_evercctested(zwdhs, 18, 49)
-urban_evercctested_zwdhs$df <- "zwdhs"
-```
-```{r phia2}
-urban_evercctested_phia_list <- list(NA)
-urban_evercctested_phia <- data.frame(df = NA, Geotype = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- urban_evercctested(phia_list[[i]], 18, 49)
-  urban_evercctested_phia_list[[i]] <- df
-  urban_evercctested_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  urban_evercctested_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("urban_evercctested_", phia_names[i])
-  names(urban_evercctested_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm2}
-#South Africa
-urban_everhadpapsmear_sabssm <- urban_everhadpapsmear(sabssm, 18, 49)
-urban_everhadpapsmear_sabssm$df <- "sabssm"
-```
-```{r pooled2}
-urban_evercctested_pooled <- urban_evercctested(pooled_surveys1, 18, 49)
-urban_everhadpapsmear_pooled <- urban_everhadpapsmear(pooled_surveys1, 18, 49)
-
-urban_evercctested_pooled$df <- "pooled"
-urban_everhadpapsmear_pooled$df <- "pooled"
-```
-```{r combine2}
-urban_evercctested_df <- rbind(urban_evercctested_bndhs,
-                               urban_evercctested_nm13dhs,
-                      urban_evercctested_zwdhs,
-                      urban_evercctested_phia,
-                      urban_evercctested_pooled)
-urban_evercctested_df$Type <- "General CC Test"
-
-urban_everhadpapsmear_df <- rbind(urban_everhadpapsmear_ls9dhs,
-                        urban_everhadpapsmear_ls14dhs,
-                        urban_everhadpapsmear_nm13dhs,
-                        urban_everhadpapsmear_sadhs,
-                        urban_everhadpapsmear_sabssm,
-                        urban_everhadpapsmear_pooled)
-urban_everhadpapsmear_df$Type <- "Pap Smear"
-
-urban_evertest_df <- rbind(urban_evercctested_df,
-                    urban_everhadpapsmear_df)
-
-urban_evertest_df <- left_join(urban_evertest_df, surveys)
-```
-```{r plots2 by region, fig.height = 9}
-ggplot(urban_evertest_df[!is.na(urban_evertest_df$Country) & urban_evertest_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Geotype)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC ever \namong all women 18-49 by geotype\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(urban_evertest_df[!is.na(urban_evertest_df$Country) & urban_evertest_df$Type == "Pap Smear",], 
-       aes(x = Country, y = Prop, fill = Geotype)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear ever \namong all women 18-49 by geotype") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(urban_evertest_df[urban_evertest_df$df == "pooled",], aes(x = Type, y = Prop, fill = Geotype)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested ever \namong women 18-49 in SSA by geotype\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom") 
-```
-
-# Proportion cc tested ever by wealth index 
-```{r prop tested ever by wealth function}
-#function for general cc testing
-wealth_evercctested <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested) & !is.na(wealth_quint))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_cc_tested, ~wealth_quint, svyciprop, design = design, vartype = "ci", method = "beta")
-
-    results <- data.frame(Quintile = c("Lowest", "Second", "Middle", "Fourth", "Highest"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-
-#function for pap smear
-wealth_everhadpapsmear <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear) & !is.na(wealth_quint))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_had_pap_smear, ~wealth_quint, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-    if(nrow(m) != 5){
-      return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    }else{
-      results <- data.frame(Quintile = c("Lowest", "Second", "Middle", "Fourth", "Highest"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-      return(results)
-    }
-  }
-}
-```
-```{r dhs3}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-wealth_evercctested_bndhs <- wealth_evercctested(bndhs, 18, 49)
-wealth_evercctested_bndhs$df <- "bndhs"
-
-#Lesotho
-wealth_everhadpapsmear_ls9dhs <- wealth_everhadpapsmear(ls9dhs, 18, 49)
-wealth_everhadpapsmear_ls9dhs$df <- "ls9dhs"
-
-wealth_everhadpapsmear_ls14dhs <- wealth_everhadpapsmear(ls14dhs, 18, 49)
-wealth_everhadpapsmear_ls14dhs$df <- "ls14dhs"
-
-#Namibia
-wealth_evercctested_nm13dhs <- wealth_everhadpapsmear(nm13dhs, 18, 49)
-wealth_evercctested_nm13dhs$df <- "nm13dhs"
-
-wealth_everhadpapsmear_nm13dhs <- wealth_everhadpapsmear(nm13dhs, 18, 49)
-wealth_everhadpapsmear_nm13dhs$df <- "nm13dhs"
-
-#South Africa
-wealth_everhadpapsmear_sadhs <- wealth_everhadpapsmear(sadhs, 18, 49)
-wealth_everhadpapsmear_sadhs$df <- "sadhs"
-
-#Zimbabwe
-wealth_evercctested_zwdhs <- wealth_evercctested(zwdhs, 18, 49)
-wealth_evercctested_zwdhs$df <- "zwdhs"
-```
-```{r phia3}
-wealth_evercctested_phia_list <- list(NA)
-wealth_evercctested_phia <- data.frame(df = NA, Quintile = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- wealth_evercctested(phia_list[[i]], 18, 49)
-  wealth_evercctested_phia_list[[i]] <- df
-  wealth_evercctested_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  wealth_evercctested_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("wealth_evercctested_", phia_names[i])
-  names(wealth_evercctested_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm3}
-#South Africa
-wealth_everhadpapsmear_sabssm <- wealth_everhadpapsmear(sabssm, 18, 49)
-wealth_everhadpapsmear_sabssm$df <- "sabssm"
-```
-```{r zamsteps3}
-wealth_evercctested_zamsteps <- wealth_evercctested(zmsteps, 18, 49)
-wealth_evercctested_zamsteps$df <- "zamsteps"
-```
-```{r pooled3}
-wealth_evercctested_pooled <- wealth_evercctested(pooled_surveys1, 18, 49)
-wealth_everhadpapsmear_pooled <- wealth_everhadpapsmear(pooled_surveys1, 18, 49)
-
-wealth_evercctested_pooled$df <- "pooled"
-wealth_everhadpapsmear_pooled$df <- "pooled"
-```
-```{r combine3}
-wealth_evercctested_df <- rbind(wealth_evercctested_bndhs,
-                                wealth_evercctested_nm13dhs,
-                      wealth_evercctested_zwdhs,
-                      wealth_evercctested_phia,
-                      wealth_evercctested_zamsteps)
-wealth_evercctested_df$Type <- "General CC Test"
-
-wealth_everhadpapsmear_df <- rbind(wealth_everhadpapsmear_ls9dhs,
-                        wealth_everhadpapsmear_ls14dhs,
-                        wealth_everhadpapsmear_nm13dhs,
-                        wealth_everhadpapsmear_sadhs,
-                        wealth_everhadpapsmear_sabssm)
-wealth_everhadpapsmear_df$Type <- "Pap Smear"
-
-wealth_evertest_df <- rbind(wealth_evercctested_df,
-                    wealth_everhadpapsmear_df)
-
-wealth_evertest_df <- left_join(wealth_evertest_df, surveys)
-
-wealth_evertest_df$Quintile <- factor(wealth_evertest_df$Quintile, levels = c("Lowest", "Second", "Middle", "Fourth", "Highest"))
-```
-```{r plots3 by region, fig.height = 9}
-ggplot(wealth_evertest_df[!is.na(wealth_evertest_df$Country) & wealth_evertest_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Quintile)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC ever \namong all women 18-49 by wealth quintile\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(wealth_evertest_df[!is.na(wealth_evertest_df$Country) & wealth_evertest_df$Type == "Pap Smear" & wealth_evertest_df$Survey != "zamsteps",], 
-       aes(x = Country, y = Prop, fill = Quintile)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear ever \namong all women 18-49 by wealth quintile\n(excludes zamsteps)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(wealth_evertest_df[wealth_evertest_df$df == "pooled",], aes(x = Type, y = Prop, fill = Quintile)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested ever \namong women 18-49 in SSA by wealth quintile\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom") 
-```
-
-
-# Proportion cc tested ever by education
-```{r prop tested ever by education level function}
-#function for general cc testing
-edu_evercctested <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested) & !is.na(edu))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_cc_tested, ~edu, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-    results <- data.frame(Level = c("No Education", "Primary", "Secondary", "More than Secondary"), 
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-  
-    return(results)
-  }
-}
-
-#function for pap smear
-edu_everhadpapsmear <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear) & !is.na(edu))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_had_pap_smear, ~edu, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-    results <- data.frame(Level = c("No Education", "Primary", "Secondary", "More than Secondary"), 
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-  
-    return(results)
-  }
-}
-```
-```{r dhs edu}
-#Benin
-edu_evercctested_bndhs <- edu_evercctested(bndhs, 18, 49)
-edu_evercctested_bndhs$df <- "bndhs"
-
-#Lesotho
-edu_everhadpapsmear_ls9dhs <- edu_everhadpapsmear(ls9dhs, 18, 49)
-edu_everhadpapsmear_ls9dhs$df <- "ls9dhs"
-
-edu_everhadpapsmear_ls14dhs <- edu_everhadpapsmear(ls14dhs, 18, 49)
-edu_everhadpapsmear_ls14dhs$df <- "ls14dhs"
-
-#Namibia
-edu_evercctested_nm13dhs <- edu_everhadpapsmear(nm13dhs, 18, 49)
-edu_evercctested_nm13dhs$df <- "nm13dhs"
-
-edu_everhadpapsmear_nm13dhs <- edu_everhadpapsmear(nm13dhs, 18, 49)
-edu_everhadpapsmear_nm13dhs$df <- "nm13dhs"
-
-#South Africa
-edu_everhadpapsmear_sadhs <- edu_everhadpapsmear(sadhs, 18, 49)
-edu_everhadpapsmear_sadhs$df <- "sadhs"
-
-#Zimbabwe
-edu_evercctested_zwdhs <- edu_evercctested(zwdhs, 18, 49)
-edu_evercctested_zwdhs$df <- "zwdhs"
-```
-```{r phia edu}
-edu_evercctested_phia_list <- list(NA)
-edu_evercctested_phia <- data.frame(df = NA, Level = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- edu_evercctested(phia_list[[i]], 18, 49)
-  edu_evercctested_phia_list[[i]] <- df
-  edu_evercctested_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  edu_evercctested_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("edu_evercctested_", phia_names[i])
-  names(edu_evercctested_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm edu}
-#South Africa
-edu_everhadpapsmear_sabssm <- edu_everhadpapsmear(sabssm, 18, 49)
-edu_everhadpapsmear_sabssm$df <- "sabssm"
-```
-```{r zamsteps edu}
-edu_evercctested_zamsteps <- edu_evercctested(zmsteps, 18, 49)
-edu_evercctested_zamsteps$df <- "zamsteps"
-```
-```{r pooled edu}
-edu_evercctested_pooled <- edu_evercctested(pooled_surveys1, 18, 49)
-edu_everhadpapsmear_pooled <- edu_everhadpapsmear(pooled_surveys1, 18, 49)
-
-edu_evercctested_pooled$df <- "pooled"
-edu_everhadpapsmear_pooled$df <- "pooled"
-```
-```{r combine edu}
-edu_evercctested_df <- rbind(edu_evercctested_bndhs,
-                             edu_evercctested_nm13dhs,
-                      edu_evercctested_zwdhs,
-                      edu_evercctested_phia,
-                      edu_evercctested_zamsteps,
-                      edu_evercctested_pooled)
-edu_evercctested_df$Type <- "General CC Test"
-
-edu_everhadpapsmear_df <- rbind(edu_everhadpapsmear_ls9dhs,
-                        edu_everhadpapsmear_ls14dhs,
-                        edu_everhadpapsmear_nm13dhs,
-                        edu_everhadpapsmear_sadhs,
-                        edu_everhadpapsmear_sabssm,
-                        edu_everhadpapsmear_pooled)
-edu_everhadpapsmear_df$Type <- "Pap Smear"
-
-edu_evertest_df <- rbind(edu_evercctested_df,
-                    edu_everhadpapsmear_df)
-
-edu_evertest_df <- left_join(edu_evertest_df, surveys)
-
-edu_evertest_df$Level = factor(edu_evertest_df$Level, levels = c("No Education", "Primary", "Secondary", "More than Secondary"))
-```
-```{r plots edu by region, fig.height = 9}
-ggplot(edu_evertest_df[!is.na(edu_evertest_df$Country) & edu_evertest_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC ever \namong all women 18-49 by education level\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(edu_evertest_df[!is.na(edu_evertest_df$Country) & edu_evertest_df$Type == "Pap Smear",], 
-       aes(x = Country, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear ever \namong all women 18-49 by education level") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(edu_evertest_df[edu_evertest_df$df == "pooled",], aes(x = Type, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested ever \namong women 18-49 in SSA by education level\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-
-# Proportion cc tested ever by literacy (only dhs has variable)
-```{r prop tested ever by literacy function}
-#function for general cc testing
-literacy_evercctested <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested) & !is.na(literacy))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_cc_tested, ~literacy, svyciprop, design = design, vartype = "ci", method = "beta")
-
-    results <- data.frame(Level = c("Cannot Read", "Able to read only parts of sentence", "Able to read whole sentence", "No card with required language", "Blind/Visually impaired"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-
-#function for pap smear
-literacy_everhadpapsmear <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear) & !is.na(literacy))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_had_pap_smear, ~literacy, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-    if(nrow(m) != 5){
-      return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    }else{
-      results <- data.frame(Level = c("Cannot Read", "Able to read only parts of sentence", "Able to read whole sentence", "No card with required language", "Blind/Visually impaired"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-      return(results)
-    }
-  }
-}
-```
-```{r dhs lit}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-literacy_evercctested_bndhs <- literacy_evercctested(bndhs, 18, 49)
-literacy_evercctested_bndhs$df <- "bndhs"
-
-#Lesotho
-literacy_everhadpapsmear_ls9dhs <- literacy_everhadpapsmear(ls9dhs, 18, 49)
-literacy_everhadpapsmear_ls9dhs$df <- "ls9dhs"
-
-literacy_everhadpapsmear_ls14dhs <- literacy_everhadpapsmear(ls14dhs, 18, 49)
-literacy_everhadpapsmear_ls14dhs$df <- "ls14dhs"
-
-#Namibia
-literacy_evercctested_nm13dhs <- df_age_fig(age.groups, nm13dhs, literacy_evercctested, df)
-literacy_evercctested_nm13dhs$df <- "nm13dhs"
-
-literacy_everhadpapsmear_nm13dhs <- df_age_fig(age.groups, nm13dhs, literacy_everhadpapsmear, df)
-literacy_everhadpapsmear_nm13dhs$df <- "nm13dhs"
-
-#South Africa
-literacy_everhadpapsmear_sadhs <- literacy_everhadpapsmear(sadhs, 18, 49)
-literacy_everhadpapsmear_sadhs$df <- "sadhs"
-
-#Zimbabwe
-literacy_evercctested_zwdhs <- literacy_evercctested(zwdhs, 18, 49)
-literacy_evercctested_zwdhs$df <- "zwdhs"
-```
-```{r pooled lit}
-literacy_evercctested_pooled <- literacy_evercctested(pooled_surveys1, 18, 49)
-literacy_everhadpapsmear_pooled <- literacy_everhadpapsmear(pooled_surveys1, 18, 49)
-
-literacy_evercctested_pooled$df <- "pooled"
-literacy_everhadpapsmear_pooled$df <- "pooled"
-```
-```{r combine lit}
-literacy_evercctested_df <- rbind(literacy_evercctested_bndhs,
-                                  literacy_evercctested_nm13dhs,
-                      literacy_evercctested_zwdhs,
-                      literacy_evercctested_pooled)
-literacy_evercctested_df$Type <- "General CC Test"
-
-literacy_everhadpapsmear_df <- rbind(literacy_everhadpapsmear_ls9dhs,
-                        literacy_everhadpapsmear_ls14dhs,
-                        literacy_everhadpapsmear_nm13dhs,
-                        literacy_everhadpapsmear_sadhs,
-                        literacy_everhadpapsmear_pooled)
-literacy_everhadpapsmear_df$Type <- "Pap Smear"
-
-literacy_evertest_df <- rbind(literacy_evercctested_df,
-                    literacy_everhadpapsmear_df)
-
-literacy_evertest_df <- left_join(literacy_evertest_df, surveys)
-
-literacy_evertest_df$Level <- factor(literacy_evertest_df$Level, levels = c("Cannot Read", "Able to read only parts of sentence", "Able to read whole sentence", "No card with required language", "Blind/Visually impaired"))
-```
-```{r plots lit by region, fig.height = 9}
-ggplot(literacy_evertest_df[!is.na(literacy_evertest_df$Country) & literacy_evertest_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC ever \namong all women 18-49 by literacy level\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r, fig.height = 9}
-ggplot(literacy_evertest_df[!is.na(literacy_evertest_df$Country) & literacy_evertest_df$Type == "Pap Smear" ,], 
-       aes(x = Country, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear ever \namong all women 18-49 by literacy level") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r, fig.height = 9}
-ggplot(literacy_evertest_df[literacy_evertest_df$df == "pooled",], aes(x = Type, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested ever \namong women 18-49 in SSA by literacy level") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-
-# Proportion cc tested ever by marital status
-```{r prop tested ever by married function}
-#function for general cc testing
-married_evercctested <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested) & !is.na(marital_status))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_cc_tested, ~marital_status, svyciprop, design = design, vartype = "ci", method = "beta")
-
-    results <- data.frame(Status = c("Never Married", "Married", "Cohabiting", "Widowed", "Divorced/Separated"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-
-#function for pap smear
-married_everhadpapsmear <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear) & !is.na(marital_status))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_had_pap_smear, ~marital_status, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-      results <- data.frame(Status = c("Never Married", "Married", "Cohabiting", "Widowed", "Divorced/Separated"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-```
-```{r dhs mar}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-married_evercctested_bndhs <- married_evercctested(bndhs, 18, 49)
-married_evercctested_bndhs$df <- "bndhs"
-
-#Lesotho
-married_everhadpapsmear_ls9dhs <- married_everhadpapsmear(ls9dhs, 18, 49)
-married_everhadpapsmear_ls9dhs$df <- "ls9dhs"
-
-married_everhadpapsmear_ls14dhs <- married_everhadpapsmear(ls14dhs, 18, 49)
-married_everhadpapsmear_ls14dhs$df <- "ls14dhs"
-
-#Namibia
-married_evercctested_nm13dhs <- married_everhadpapsmear(nm13dhs, 18, 49)
-married_evercctested_nm13dhs$df <- "nm13dhs"
-
-married_everhadpapsmear_nm13dhs <- married_everhadpapsmear(nm13dhs, 18, 49)
-married_everhadpapsmear_nm13dhs$df <- "nm13dhs"
-
-#South Africa
-married_everhadpapsmear_sadhs <- married_everhadpapsmear(sadhs, 18, 49)
-married_everhadpapsmear_sadhs$df <- "sadhs"
-
-#Zimbabwe
-married_evercctested_zwdhs <- married_evercctested(zwdhs, 18, 49)
-married_evercctested_zwdhs$df <- "zwdhs"
-```
-```{r phia mar}
-married_evercctested_phia_list <- list(NA)
-married_evercctested_phia <- data.frame(df = NA, Status = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- married_evercctested(phia_list[[i]], 18, 49)
-  married_evercctested_phia_list[[i]] <- df
-  married_evercctested_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  married_evercctested_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("married_evercctested_", phia_names[i])
-  names(married_evercctested_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm mar}
-#South Africa
-married_everhadpapsmear_sabssm <- married_everhadpapsmear(sabssm, 18, 49)
-married_everhadpapsmear_sabssm$df <- "sabssm"
-```
-```{r zamsteps mar}
-married_evercctested_zamsteps <- married_evercctested(zmsteps, 18, 49)
-married_evercctested_zamsteps$df <- "zamsteps"
-```
-```{r pooled mar}
-married_evercctested_pooled <- married_evercctested(pooled_surveys1, 18, 49)
-married_everhadpapsmear_pooled <- married_everhadpapsmear(pooled_surveys1, 18, 49)
-
-married_evercctested_pooled$df <- "pooled"
-married_everhadpapsmear_pooled$df <- "pooled"
-```
-```{r combine mar}
-married_evercctested_df <- rbind(married_evercctested_bndhs,
-                                 married_evercctested_nm13dhs,
-                      married_evercctested_zwdhs,
-                      married_evercctested_phia,
-                      married_evercctested_zamsteps,
-                      married_evercctested_pooled)
-married_evercctested_df$Type <- "General CC Test"
-
-married_everhadpapsmear_df <- rbind(married_everhadpapsmear_ls9dhs,
-                        married_everhadpapsmear_ls14dhs,
-                        married_everhadpapsmear_nm13dhs,
-                        married_everhadpapsmear_sadhs,
-                        married_everhadpapsmear_sabssm,
-                        married_everhadpapsmear_pooled)
-married_everhadpapsmear_df$Type <- "Pap Smear"
-
-married_evertest_df <- rbind(married_evercctested_df,
-                    married_everhadpapsmear_df)
-
-married_evertest_df <- left_join(married_evertest_df, surveys)
-
-married_evertest_df$Status <- factor(married_evertest_df$Status, levels = c("Never Married", "Married", "Cohabiting", "Widowed", "Divorced/Separated"))
-```
-```{r plots mar, fig.height = 9}
-ggplot(married_evertest_df[!is.na(married_evertest_df$Country) & married_evertest_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC ever \namong all women 18-49 by married quintile\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(married_evertest_df[!is.na(married_evertest_df$Country) & married_evertest_df$Type == "Pap Smear" & married_evertest_df$Survey != "zamsteps",], 
-       aes(x = Country, y = Prop, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear ever \namong all women 18-49 by married quintile") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(married_evertest_df[married_evertest_df$df == "pooled",], aes(x = Type, y = Prop, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested ever \namong women 18-49 in SSA by married quintile\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom") 
-```
-
-
-# Proportion cc tested ever by condom use at last sex
-```{r prop tested ever by condom function}
-#function for general cc testing
-condom_evercctested <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested) & !is.na(most_recent_condom_use))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_cc_tested, ~most_recent_condom_use, svyciprop, design = design, vartype = "ci", method = "beta")
-
-    results <- data.frame(CondomUseAtLastSex = c("No", "Yes"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-
-#function for pap smear
-condom_everhadpapsmear <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear) & !is.na(most_recent_condom_use))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~ever_had_pap_smear, ~most_recent_condom_use, svyciprop, design = design, vartype = "ci", method = "beta")
-  
-    results <- data.frame(CondomUseAtLastSex = c("No", "Yes"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-```
-```{r dhs condom}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-condom_evercctested_bndhs <- condom_evercctested(bndhs, 18, 49)
-condom_evercctested_bndhs$df <- "bndhs"
-
-#Lesotho
-condom_everhadpapsmear_ls9dhs <- condom_everhadpapsmear(ls9dhs, 18, 49)
-condom_everhadpapsmear_ls9dhs$df <- "ls9dhs"
-
-condom_everhadpapsmear_ls14dhs <- condom_everhadpapsmear(ls14dhs, 18, 49)
-condom_everhadpapsmear_ls14dhs$df <- "ls14dhs"
-
-#Namibia
-condom_evercctested_nm13dhs <- df_age_fig(age.groups, nm13dhs, condom_evercctested, df)
-condom_evercctested_nm13dhs$df <- "nm13dhs"
-
-condom_everhadpapsmear_nm13dhs <- df_age_fig(age.groups, nm13dhs, condom_everhadpapsmear, df)
-condom_everhadpapsmear_nm13dhs$df <- "nm13dhs"
-
-#South Africa
-condom_everhadpapsmear_sadhs <- condom_everhadpapsmear(sadhs, 18, 49)
-condom_everhadpapsmear_sadhs$df <- "sadhs"
-
-#Zimbabwe
-condom_evercctested_zwdhs <- condom_evercctested(zwdhs, 18, 49)
-condom_evercctested_zwdhs$df <- "zwdhs"
-```
-```{r phia condom}
-condom_evercctested_phia_list <- list(NA)
-condom_evercctested_phia <- data.frame(df = NA, CondomUseAtLastSex = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- condom_evercctested(phia_list[[i]], 18, 49)
-  condom_evercctested_phia_list[[i]] <- df
-  condom_evercctested_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  condom_evercctested_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("condom_evercctested_", phia_names[i])
-  names(condom_evercctested_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm condom}
-#South Africa
-condom_everhadpapsmear_sabssm <- condom_everhadpapsmear(sabssm, 18, 49)
-condom_everhadpapsmear_sabssm$df <- "sabssm"
-```
-```{r pooled condom}
-condom_evercctested_pooled <- condom_evercctested(pooled_surveys1, 18, 49)
-condom_everhadpapsmear_pooled <- condom_everhadpapsmear(pooled_surveys1, 18, 49)
-
-condom_evercctested_pooled$df <- "pooled"
-condom_everhadpapsmear_pooled$df <- "pooled"
-```
-```{r combine condom}
-condom_evercctested_df <- rbind(condom_evercctested_bndhs,
-                                condom_evercctested_nm13dhs,
-                      condom_evercctested_zwdhs,
-                      condom_evercctested_phia,
-                      condom_evercctested_pooled)
-condom_evercctested_df$Type <- "General CC Test"
-
-condom_everhadpapsmear_df <- rbind(condom_everhadpapsmear_ls9dhs,
-                        condom_everhadpapsmear_ls14dhs,
-                        condom_everhadpapsmear_nm13dhs,
-                        condom_everhadpapsmear_sadhs,
-                        condom_everhadpapsmear_sabssm,
-                        condom_everhadpapsmear_pooled)
-condom_everhadpapsmear_df$Type <- "Pap Smear"
-
-condom_evertest_df <- rbind(condom_evercctested_df,
-                    condom_everhadpapsmear_df)
-
-condom_evertest_df <- left_join(condom_evertest_df, surveys)
-```
-```{r plots condom, fig.height = 9}
-ggplot(condom_evertest_df[!is.na(condom_evertest_df$Country) & condom_evertest_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = CondomUseAtLastSex)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC ever \namong all women 18-49 by condom use at last sex\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(condom_evertest_df[!is.na(condom_evertest_df$Country) & condom_evertest_df$Type == "Pap Smear",], 
-       aes(x = Country, y = Prop, fill = CondomUseAtLastSex)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear ever \namong all women 18-49 by condom use at last sex") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9}
-ggplot(condom_evertest_df[condom_evertest_df$df == "pooled",], aes(x = Type, y = Prop, fill = CondomUseAtLastSex)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested ever \namong women 18-49 in SSA by condom use at last sex\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom") 
-```
-
 
 # Proportion cc tested ever by HIV status
 ```{r age settings}
@@ -1301,7 +329,7 @@ options(survey.lonely.psu="adjust")
 hiv_evercctested <- function(df, age1, age2){
   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_cc_tested) & !is.na(hivstat))
   
-  if(nrow(sub_df) <= 1){
+  if(nrow(sub_df) <= 1){ #done for age groups + hiv status that have 1 or less people
     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
     
   }else{
@@ -1326,7 +354,7 @@ hiv_evercctested <- function(df, age1, age2){
 hiv_everhadpapsmear <- function(df, age1, age2){
   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(ever_had_pap_smear) & !is.na(hivstat))
   
-  if(nrow(sub_df) <= 1){
+  if(nrow(sub_df) <= 1){ #done for age groups + hiv status that have 1 or less people
     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
     
   }else{
