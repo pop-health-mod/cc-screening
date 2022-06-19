@@ -1,6 +1,6 @@
 ---
 title: "CC Testing Past 3y"
-subtitle: "Note that all of the Southern African country surveys only asked about pap smears, and all the other sub-saharan country surveys outside of WHS asked about CC testing in general"
+subtitle: "Note that all of the Southern African country surveys and WHS only asked about pap smears, and all the other sub-Saharan African country surveys outside of WHS asked about CC testing in general"
 output:
   pdf_document:
     fig_crop: FALSE
@@ -20,48 +20,38 @@ library(dplyr)
 library(survey)
 library(ggplot2)
 library(readxl)
-source("df_functions.R")
+source("df_functions.R") #functions created for dataframes
+load("Cleaned Indv Surveys") #from Combine Clean Surveys.Rmd
+load("Cleaned Pooled Surveys") #from Combine Clean Surveys.Rmd
 
-load("Cleaned Pooled Surveys")
-load("Cleaned Indv Surveys")
 surveys <- read_excel("surveys.xlsx", sheet = 1)
 all_q <- read_excel("surveys.xlsx", sheet = 2)
-
-pooled_surveys1 <- pooled_surveys
-pooled_surveys1$weight <- 1
 ```
 
 ```{r age settings}
-age.groups <- data.frame(c(15, 18, 15, 25, 30, 50, seq(15, 65, 5), 0), c(49, 49, 29, 49, 49, 1000, seq(19, 64, 5), 1000, 1000))
+#set based on which age groups we want survey summary estimates from
+agegr <- data.frame(c(15, 18, 15, 25, 30, 50, seq(15, 65, 5), 0), c(49, 49, 29, 49, 49, 1000, seq(19, 64, 5), 1000, 1000))
 df <- data.frame(agegr = c("15-49","18-49", "15-29", "25-49", "30-49", "50-65+", 
-                                "15-19", "20-24", "25-29", "30-34", "35-39", 
-                                "40-44", "45-49", "50-54", "55-59", "60-64", "65-1000", "All"))
+                           "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", 
+                           "45-49", "50-54", "55-59", "60-64", "65-1000", "All"))
 options(survey.lonely.psu="adjust")
 ```
 
 # Proportion cc tested in the past 3 years
-```{r prop tested in past 3y function}
+```{r function for prop tested in past 3y function}
 #function for general cc testing
 cctestpast3y <- function(df, age1, age2){
   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_test_past_3y))
   
-  if(nrow(sub_df) <= 1){
+  if(nrow(sub_df) <= 1){ #done for age groups that have 1 or less people
     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
     
   }else{
-    if(length(sub_df$strata) != 0){
-      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu, strata = ~strata, nest = T) #may need to add strata
-      m <- svyciprop(~cc_test_past_3y, design = design)
-      ci <- confint(m)
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu, strata = ~strata, nest = T) 
+    m <- svyciprop(~cc_test_past_3y, design = design)
+    ci <- confint(m)
   
-      return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
-    } else{
-      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-      m <- svyciprop(~cc_test_past_3y, design = design)
-      ci <- confint(m)
-  
-      return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
-    }
+    return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
   }
 }
 
@@ -69,58 +59,50 @@ cctestpast3y <- function(df, age1, age2){
 papsmearpast3y <- function(df, age1, age2){
   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y))
   
-  if(nrow(sub_df) <= 1){
+  if(nrow(sub_df) <= 1){ #done for age groups that have 1 or less people
     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
     
   }else{
-    if(length(sub_df$strata) != 0){
-      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu, strata = ~strata, nest = T) #may need to add strata
-      m <- svyciprop(~pap_smear_past_3y, design = design)
-      ci <- confint(m)
+    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu, strata = ~strata, nest = T) #may need to add strata
+    m <- svyciprop(~pap_smear_past_3y, design = design)
+    ci <- confint(m)
   
-      return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
-    } else{
-      design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-      m <- svyciprop(~pap_smear_past_3y, design = design)
-      ci <- confint(m)
-  
-      return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
-    }
+    return(data.frame("Mean" = as.numeric(m[1]), "Lower" = ci[1], "Upper" = ci[2]))
   }
 }
 ```
-```{r dhs1}
+```{r dhs}
 #Benin
-cctestpast3y_bndhs <- df_age_fig(age.groups, bndhs, cctestpast3y, df)
+cctestpast3y_bndhs <- df_age_fig(agegr, bndhs, cctestpast3y, df)
 cctestpast3y_bndhs$df <- "bndhs"
 
 #Cameroon
-cctestpast3y_cmdhs <- df_age_fig(age.groups, cmdhs, cctestpast3y, df)
+cctestpast3y_cmdhs <- df_age_fig(agegr, cmdhs, cctestpast3y, df)
 cctestpast3y_cmdhs$df <- "cmdhs"
 
 #Lesotho
-papsmearpast3y_ls9dhs <- df_age_fig(age.groups, ls9dhs, papsmearpast3y, df)
+papsmearpast3y_ls9dhs <- df_age_fig(agegr, ls9dhs, papsmearpast3y, df)
 papsmearpast3y_ls9dhs$df <- "ls9dhs"
 
-papsmearpast3y_ls14dhs <- df_age_fig(age.groups, ls14dhs, papsmearpast3y, df)
+papsmearpast3y_ls14dhs <- df_age_fig(agegr, ls14dhs, papsmearpast3y, df)
 papsmearpast3y_ls14dhs$df <- "ls14dhs"
 
 #South Africa
-papsmearpast3y_sadhs <- df_age_fig(age.groups, sadhs, papsmearpast3y, df)
+papsmearpast3y_sadhs <- df_age_fig(agegr, sadhs, papsmearpast3y, df)
 papsmearpast3y_sadhs$df <- "sadhs"
 
 #Zimbabwe
-cctestpast3y_zwdhs <- df_age_fig(age.groups, zwdhs, cctestpast3y, df)
+cctestpast3y_zwdhs <- df_age_fig(agegr, zwdhs, cctestpast3y, df)
 cctestpast3y_zwdhs$df <- "zwdhs"
 ```
-```{r phia1}
+```{r phia}
 cctestpast3y_phia_list <- list(NA)
 cctestpast3y_phia <- data.frame(df = NA, agegr = NA)
 phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
 
 n = 1
 for(i in 1:length(phia_list)){
-  df <- df_age_fig(age.groups, phia_list[[i]], cctestpast3y, df)
+  df <- df_age_fig(agegr, phia_list[[i]], cctestpast3y, df)
   cctestpast3y_phia_list[[i]] <- df
   cctestpast3y_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
   cctestpast3y_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
@@ -131,21 +113,21 @@ for(i in 1:length(phia_list)){
   n = n+nrow(df)
 }
 ```
-```{r sabssm1}
+```{r sabssm}
 #South Africa
-papsmearpast3y_sabssm <- df_age_fig(age.groups, sabssm, papsmearpast3y, df)
+papsmearpast3y_sabssm <- df_age_fig(agegr, sabssm, papsmearpast3y, df)
 papsmearpast3y_sabssm$df <- "sabssm"
 ```
-```{r sage1}
+```{r sage}
 #Ghana
-papsmearpast3y_ghsage <- df_age_fig(age.groups, ghsage, papsmearpast3y, df)
+papsmearpast3y_ghsage <- df_age_fig(agegr, ghsage, papsmearpast3y, df)
 papsmearpast3y_ghsage$df <- "ghsage"
 
 #South Africa
-papsmearpast3y_sasage <- df_age_fig(age.groups, sasage, papsmearpast3y, df)
+papsmearpast3y_sasage <- df_age_fig(agegr, sasage, papsmearpast3y, df)
 papsmearpast3y_sasage$df <- "sasage"
 ```
-```{r whs1}
+```{r whs}
 papsmearpast3y_whs_list <- list(NA)
 papsmearpast3y_whs <- data.frame(df = NA, agegr = NA)
 whs_names <- c("bfwhs", "chwhs", "ciwhs", "cmwhs", "cnwhs", "ethwhs", "ghwhs", 
@@ -156,7 +138,7 @@ n = 1
 for(i in 1:length(whs_list)){
   svy <- whs_list[[i]]
   svy <- svy[!is.na(svy$strata),] #remove the 4 strata nas from kenya and namibia
-  df <- df_age_fig(age.groups, svy, papsmearpast3y, df)
+  df <- df_age_fig(agegr, svy, papsmearpast3y, df)
   papsmearpast3y_whs_list[[i]] <- df
   papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 2:5] <- df
   papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 1] <- whs_names[i]
@@ -167,22 +149,12 @@ for(i in 1:length(whs_list)){
   n = n+nrow(df)
 }
 
-papsmearpast3y_whs_list$papsmearpast3y_cmwhs
-
 ```
-```{r pooled1}
-# cctestpast3y_pooled <- df_age_fig(age.groups, pooled_surveys1, cctestpast3y, df)
-# papsmearpast3y_pooled <- df_age_fig(age.groups, pooled_surveys1, papsmearpast3y, df)
-# 
-# cctestpast3y_pooled$df <- "pooled"
-# papsmearpast3y_pooled$df <- "pooled"
-```
-```{r combine1}
+```{r combine}
 cctestpast3y_df <- rbind(cctestpast3y_bndhs,
                          cctestpast3y_cmdhs,
                          cctestpast3y_zwdhs,
                          cctestpast3y_phia)
-                         #cctestpast3y_pooled)
 cctestpast3y_df$Type <- "General CC Test"
 
 papsmearpast3y_df <- rbind(papsmearpast3y_ls9dhs,
@@ -190,15 +162,12 @@ papsmearpast3y_df <- rbind(papsmearpast3y_ls9dhs,
                         papsmearpast3y_sadhs,
                         papsmearpast3y_sabssm,
                         papsmearpast3y_whs)
-                        #papsmearpast3y_pooled)
 papsmearpast3y_df$Type <- "Pap Smear"
 
 testpast3y_df <- rbind(cctestpast3y_df,
                     papsmearpast3y_df)
 
 testpast3y_df <- left_join(testpast3y_df, surveys)
-
-# testpast3y_df[testpast3y_df$Age.Groups == "30-49",]
 ```
 ```{r add new surveys}
 # new_surveys <- rbind(papsmearpast3y_sasage)
@@ -207,20 +176,8 @@ testpast3y_df <- left_join(testpast3y_df, surveys)
 # testpast3y_df <- rbind(testpast3y_df, select(new_surveys, -"microdata"))
 ```
 
-```{r plots1 all SSA, fig.height = 9, fig.width = 8}
-ggplot(testpast3y_df[!is.na(testpast3y_df$Country),], aes(x = Year, y = Mean, shape = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black", aes(lty = Age.Groups)) +
-  geom_point(aes(colour = Country)) +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years among all women\n(includes dath from both general CC testing and pap smear only)") +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_shape_manual(values = c(16, 1)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r plots Country trends, fig.height = 9, fig.width = 8}
-ggplot(testpast3y_df[!is.na(testpast3y_df$Country) & testpast3y_df$Age.Groups == "All",], aes(x = Year, y = Mean, colour = Region)) +
+```{r plots by Country}
+ggplot(testpast3y_df[!is.na(testpast3y_df$Country) & testpast3y_df$agegr == "All",], aes(x = Year, y = Mean, colour = Region)) +
   geom_smooth(method = lm) +
   geom_point() +
   geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5) +
@@ -229,1058 +186,12 @@ ggplot(testpast3y_df[!is.na(testpast3y_df$Country) & testpast3y_df$Age.Groups ==
   theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm')) +
   facet_wrap(~Country)
 ```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(testpast3y_df[!is.na(testpast3y_df$Country) & testpast3y_df$Type == "General CC Test",], aes(x = Year, y = Mean, shape = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black", aes(lty = Age.Groups)) +
-  geom_point(aes(colour = Country)) +
-  #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years among all women\n(excludes those who've reported pap smear only)") +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_shape_manual(values = c(16, 1)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(testpast3y_df[!is.na(testpast3y_df$Country) & testpast3y_df$Type == "Pap Smear",], aes(x = Year, y = Mean, shape = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black", aes(lty = Age.Groups)) +
-  geom_point(aes(colour = Country)) +
-  #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years among all women") +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_shape_manual(values = c(16, 1)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r plots1 by region, fig.height = 9, fig.width = 8}
-ggplot(testpast3y_df[!is.na(testpast3y_df$Country),], aes(x = Year, y = Mean, shape = Age.Groups, lty = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black") +
-  geom_point(aes(colour = Country)) +
-  #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  facet_wrap(~Region) + 
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years among all women\n(includes dath from both general CC testing and pap smear only)") +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_shape_manual(values = c(16, 1)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(testpast3y_df[!is.na(testpast3y_df$Country) & testpast3y_df$Type == "General CC Test",], aes(x = Year, y = Mean, shape = Age.Groups, lty = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black") +
-  geom_point(aes(colour = Country)) +
-  #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  facet_wrap(~Region) + 
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years among all women\n(excludes those who've reported pap smear only)") +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_shape_manual(values = c(16, 1)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(testpast3y_df[!is.na(testpast3y_df$Country) & testpast3y_df$Type == "Pap Smear",], aes(x = Year, y = Mean, shape = Age.Groups, lty = Age.Groups)) +
-  geom_smooth(method = lm, colour = "black") +
-  geom_point(aes(colour = Country)) +
-  #geom_errorbar(aes(ymin=Lower, ymax=Upper, colour = Country), width=.5) +
-  facet_wrap(~Region) + 
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years among all women") +
-  scale_linetype_manual(values = c("solid", "dotted")) +
-  scale_shape_manual(values = c(16, 1)) +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
 \newpage
 
-# Proportion cc tested in the past 3 years by geotype
-```{r prop tested in past 3y by geography function}
-#function for general cc testing
-urban_cctestpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_test_past_3y) & !is.na(urban_rural))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~cc_test_past_3y, ~urban_rural, svyciprop, design = design)
-    ci <- confint(m)
-    
-    results <- data.frame(Geotype = c("Urban", "Rural"), Prop = m[,2], Lower = ci[,1], Upper = ci[,2])
-  
-    return(results)
-  }
-}
-
-#function for pap smear
-urban_papsmearpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y) & !is.na(urban_rural))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~pap_smear_past_3y, ~urban_rural, svyciprop, design = design)
-    ci <- confint(m)
-    
-    results <- data.frame(Geotype = c("Urban", "Rural"), Prop = m[,2], Lower = ci[,1], Upper = ci[,2])
-  
-    return(results)
-  }
-}
-```
-```{r dhs2}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-urban_cctestpast3y_bndhs <- urban_cctestpast3y(bndhs, 18, 49)
-urban_cctestpast3y_bndhs$df <- "bndhs"
-
-#Lesotho
-urban_papsmearpast3y_ls9dhs <- urban_papsmearpast3y(ls9dhs, 18, 49)
-urban_papsmearpast3y_ls9dhs$df <- "ls9dhs"
-
-urban_papsmearpast3y_ls14dhs <- urban_papsmearpast3y(ls14dhs, 18, 49)
-urban_papsmearpast3y_ls14dhs$df <- "ls14dhs"
-
-#South Africa
-urban_papsmearpast3y_sadhs <- urban_papsmearpast3y(sadhs, 18, 49)
-urban_papsmearpast3y_sadhs$df <- "sadhs"
-
-#Zimbabwe
-urban_cctestpast3y_zwdhs <- urban_cctestpast3y(zwdhs, 18, 49)
-urban_cctestpast3y_zwdhs$df <- "zwdhs"
-```
-```{r phia2}
-urban_cctestpast3y_phia_list <- list(NA)
-urban_cctestpast3y_phia <- data.frame(df = NA, Geotype = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- urban_cctestpast3y(phia_list[[i]], 18, 49)
-  urban_cctestpast3y_phia_list[[i]] <- df
-  urban_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  urban_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("urban_cctestpast3y_", phia_names[i])
-  names(urban_cctestpast3y_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm2}
-#South Africa
-urban_papsmearpast3y_sabssm <- urban_papsmearpast3y(sabssm, 18, 49)
-urban_papsmearpast3y_sabssm$df <- "sabssm"
-```
-```{r whs2}
-urban_papsmearpast3y_whs_list <- list(NA)
-urban_papsmearpast3y_whs <- data.frame(df = NA, Geotype = NA)
-whs_names <- c("bfwhs", "chwhs", "ciwhs", "cmwhs", "cnwhs", "ethwhs", "ghwhs", 
-               "knwhs", "mawhs", "mlwhs", "mrtwhs", "muswhs", "nmwhs", 
-               "sawhs", "snwhs", "szwhs", "zmwhs", "zwwhs")
-
-n = 1
-for(i in 1:length(whs)){
-  df <- urban_papsmearpast3y(whs_list[[i]], 18, 49)
-  urban_papsmearpast3y_whs_list[[i]] <- df
-  urban_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 2:5] <- df
-  urban_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 1] <- whs_names[i]
-  
-  df_name <- paste0("urban_papsmearpast3y_", whs_names[i])
-  names(urban_papsmearpast3y_whs_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r pooled2}
-urban_cctestpast3y_pooled <- urban_cctestpast3y(pooled_surveys1, 18, 49)
-urban_papsmearpast3y_pooled <- urban_papsmearpast3y(pooled_surveys1, 18, 49)
-
-urban_cctestpast3y_pooled$df <- "pooled"
-urban_papsmearpast3y_pooled$df <- "pooled"
-```
-```{r combine2}
-urban_cctestpast3y_df <- rbind(urban_cctestpast3y_bndhs,
-                      urban_cctestpast3y_zwdhs,
-                      urban_cctestpast3y_phia,
-                      urban_cctestpast3y_pooled)
-urban_cctestpast3y_df$Type <- "General CC Test"
-
-urban_papsmearpast3y_df <- rbind(urban_papsmearpast3y_ls9dhs,
-                        urban_papsmearpast3y_ls14dhs,
-                        urban_papsmearpast3y_sadhs,
-                        urban_papsmearpast3y_sabssm,
-                        urban_papsmearpast3y_whs,
-                        urban_papsmearpast3y_pooled)
-urban_papsmearpast3y_df$Type <- "Pap Smear"
-
-urban_testpast3y_df <- rbind(urban_cctestpast3y_df,
-                    urban_papsmearpast3y_df)
-
-urban_testpast3y_df <- left_join(urban_testpast3y_df, surveys)
-```
-```{r plots2 by region, fig.height = 9, fig.width = 8}
-ggplot(urban_testpast3y_df[!is.na(urban_testpast3y_df$Country) & urban_testpast3y_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Geotype)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years \namong all women 18-49 by geotype\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(urban_testpast3y_df[!is.na(urban_testpast3y_df$Country) & urban_testpast3y_df$Type == "Pap Smear" & urban_testpast3y_df$Survey != "WHS",], 
-       aes(x = Country, y = Prop, fill = Geotype)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by geotype") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(urban_testpast3y_df[!is.na(urban_testpast3y_df$Country) & urban_testpast3y_df$Type == "Pap Smear" & urban_testpast3y_df$Survey == "WHS",], 
-       aes(x = Country, y = Prop, fill = Geotype)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by geotype") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(urban_testpast3y_df[urban_testpast3y_df$df == "pooled",], aes(x = Type, y = Prop, fill = Geotype)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested in the past 3 years \namong women 18-49 in SSA by geotype\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom") 
-```
-
-\newpage
-
-# Proportion cc tested in the past 3 years by wealth index
-```{r prop tested in past 3y by wealth function}
-#function for general cc testing
-wealth_cctestpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_test_past_3y) & !is.na(wealth_quint))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~cc_test_past_3y, ~wealth_quint, svyciprop, design = design, vartype = "ci", method = "beta")
-
-    results <- data.frame(Quintile = c("Lowest", "Second", "Middle", "Fourth", "Highest"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-
-#function for pap smear
-wealth_papsmearpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y) & !is.na(wealth_quint))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~pap_smear_past_3y, ~wealth_quint, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-    if(nrow(m) != 5){
-      return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    }else{
-      results <- data.frame(Quintile = c("Lowest", "Second", "Middle", "Fourth", "Highest"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-      return(results)
-    }
-  }
-}
-```
-```{r dhs3}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-wealth_cctestpast3y_bndhs <- wealth_cctestpast3y(bndhs, 18, 49)
-wealth_cctestpast3y_bndhs$df <- "bndhs"
-
-#Lesotho
-wealth_papsmearpast3y_ls9dhs <- wealth_papsmearpast3y(ls9dhs, 18, 49)
-wealth_papsmearpast3y_ls9dhs$df <- "ls9dhs"
-
-wealth_papsmearpast3y_ls14dhs <- wealth_papsmearpast3y(ls14dhs, 18, 49)
-wealth_papsmearpast3y_ls14dhs$df <- "ls14dhs"
-
-#South Africa
-wealth_papsmearpast3y_sadhs <- wealth_papsmearpast3y(sadhs, 18, 49)
-wealth_papsmearpast3y_sadhs$df <- "sadhs"
-
-#Zimbabwe
-wealth_cctestpast3y_zwdhs <- wealth_cctestpast3y(zwdhs, 18, 49)
-wealth_cctestpast3y_zwdhs$df <- "zwdhs"
-```
-```{r phia3}
-wealth_cctestpast3y_phia_list <- list(NA)
-wealth_cctestpast3y_phia <- data.frame(df = NA, Quintile = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- wealth_cctestpast3y(phia_list[[i]], 18, 49)
-  wealth_cctestpast3y_phia_list[[i]] <- df
-  wealth_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  wealth_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("wealth_cctestpast3y_", phia_names[i])
-  names(wealth_cctestpast3y_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm3}
-#South Africa
-wealth_papsmearpast3y_sabssm <- wealth_papsmearpast3y(sabssm, 18, 49)
-wealth_papsmearpast3y_sabssm$df <- "sabssm"
-```
-```{r whs3}
-wealth_papsmearpast3y_whs_list <- list(NA)
-wealth_papsmearpast3y_whs <- data.frame(df = NA, Quintile = NA)
-whs_names <- c("bfwhs", "chwhs", "ciwhs", "cmwhs", "cnwhs", "ethwhs", "ghwhs", 
-               "knwhs", "mawhs", "mlwhs", "mrtwhs", "muswhs", "nmwhs", 
-               "sawhs", "snwhs", "szwhs", "zmwhs", "zwwhs")
-
-n = 1
-for(i in 1:length(whs)){
-  df <- wealth_papsmearpast3y(whs_list[[i]], 18, 49)
-  wealth_papsmearpast3y_whs_list[[i]] <- df
-  wealth_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 2:5] <- df
-  wealth_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 1] <- whs_names[i]
-  
-  df_name <- paste0("wealth_papsmearpast3y_", whs_names[i])
-  names(wealth_papsmearpast3y_whs_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r pooled3}
-wealth_cctestpast3y_pooled <- wealth_cctestpast3y(pooled_surveys1, 18, 49)
-wealth_papsmearpast3y_pooled <- wealth_papsmearpast3y(pooled_surveys1, 18, 49)
-
-wealth_cctestpast3y_pooled$df <- "pooled"
-wealth_papsmearpast3y_pooled$df <- "pooled"
-```
-```{r combine3}
-wealth_cctestpast3y_df <- rbind(wealth_cctestpast3y_bndhs,
-                      wealth_cctestpast3y_zwdhs,
-                      wealth_cctestpast3y_phia,
-                      wealth_cctestpast3y_pooled)
-wealth_cctestpast3y_df$Type <- "General CC Test"
-
-wealth_papsmearpast3y_df <- rbind(wealth_papsmearpast3y_ls9dhs,
-                        wealth_papsmearpast3y_ls14dhs,
-                        wealth_papsmearpast3y_sadhs,
-                        wealth_papsmearpast3y_sabssm,
-                        wealth_papsmearpast3y_whs,
-                        wealth_papsmearpast3y_pooled)
-wealth_papsmearpast3y_df$Type <- "Pap Smear"
-
-wealth_testpast3y_df <- rbind(wealth_cctestpast3y_df,
-                    wealth_papsmearpast3y_df)
-
-wealth_testpast3y_df <- left_join(wealth_testpast3y_df, surveys)
-
-wealth_testpast3y_df$Quintile <- factor(wealth_testpast3y_df$Quintile, levels = c("Lowest", "Second", "Middle", "Fourth", "Highest"))
-```
-```{r plots3 by region, fig.height = 9, fig.width = 8}
-ggplot(wealth_testpast3y_df[!is.na(wealth_testpast3y_df$Country) & wealth_testpast3y_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Quintile)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years \namong all women 18-49 by wealth quintile\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(wealth_testpast3y_df[!is.na(wealth_testpast3y_df$Country) & wealth_testpast3y_df$Type == "Pap Smear" & wealth_testpast3y_df$Survey != "WHS",], 
-       aes(x = Country, y = Prop, fill = Quintile)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by wealth quintile\n(excludes WHS)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(wealth_testpast3y_df[wealth_testpast3y_df$df == "pooled",], aes(x = Type, y = Prop, fill = Quintile)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested in the past 3 years \namong women 18-49 in SSA by wealth quintile\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom") 
-```
-
-# Proportion cc tested in the past 3 years by education
-```{r prop tested in past 3y by education level function}
-#function for general cc testing
-edu_cctestpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_test_past_3y) & !is.na(edu))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~cc_test_past_3y, ~edu, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-    results <- data.frame(Level = c("No Education", "Primary", "Secondary", "More than Secondary"), 
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-  
-    return(results)
-  }
-}
-
-#function for pap smear
-edu_papsmearpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y) & !is.na(edu))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~pap_smear_past_3y, ~edu, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-    results <- data.frame(Level = c("No Education", "Primary", "Secondary", "More than Secondary"), 
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-  
-    return(results)
-  }
-}
-```
-```{r dhs edu}
-#Benin
-edu_cctestpast3y_bndhs <- edu_cctestpast3y(bndhs, 18, 49)
-edu_cctestpast3y_bndhs$df <- "bndhs"
-
-#Lesotho
-edu_papsmearpast3y_ls9dhs <- edu_papsmearpast3y(ls9dhs, 18, 49)
-edu_papsmearpast3y_ls9dhs$df <- "ls9dhs"
-
-edu_papsmearpast3y_ls14dhs <- edu_papsmearpast3y(ls14dhs, 18, 49)
-edu_papsmearpast3y_ls14dhs$df <- "ls14dhs"
-
-#South Africa
-edu_papsmearpast3y_sadhs <- edu_papsmearpast3y(sadhs, 18, 49)
-edu_papsmearpast3y_sadhs$df <- "sadhs"
-
-#Zimbabwe
-edu_cctestpast3y_zwdhs <- edu_cctestpast3y(zwdhs, 18, 49)
-edu_cctestpast3y_zwdhs$df <- "zwdhs"
-```
-```{r phia edu}
-edu_cctestpast3y_phia_list <- list(NA)
-edu_cctestpast3y_phia <- data.frame(df = NA, Level = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- edu_cctestpast3y(phia_list[[i]], 18, 49)
-  edu_cctestpast3y_phia_list[[i]] <- df
-  edu_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  edu_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("edu_cctestpast3y_", phia_names[i])
-  names(edu_cctestpast3y_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm edu}
-#South Africa
-edu_papsmearpast3y_sabssm <- edu_papsmearpast3y(sabssm, 18, 49)
-edu_papsmearpast3y_sabssm$df <- "sabssm"
-```
-```{r whs edu}
-edu_papsmearpast3y_whs_list <- list(NA)
-edu_papsmearpast3y_whs <- data.frame(df = NA, Level = NA)
-whs_names <- c("bfwhs", "chwhs", "ciwhs", "cmwhs", "cnwhs", "ethwhs", "ghwhs", 
-               "knwhs", "mawhs", "mlwhs", "mrtwhs", "muswhs", "nmwhs", 
-               "sawhs", "snwhs", "szwhs", "zmwhs", "zwwhs")
-
-n = 1
-for(i in 1:length(whs)){
-  df <- edu_papsmearpast3y(whs_list[[i]], 18, 49)
-  edu_papsmearpast3y_whs_list[[i]] <- df
-  edu_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 2:5] <- df
-  edu_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 1] <- whs_names[i]
-  
-  df_name <- paste0("edu_papsmearpast3y_", whs_names[i])
-  names(edu_papsmearpast3y_whs_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r pooled edu}
-edu_cctestpast3y_pooled <- edu_cctestpast3y(pooled_surveys1, 18, 49)
-edu_papsmearpast3y_pooled <- edu_papsmearpast3y(pooled_surveys1, 18, 49)
-
-edu_cctestpast3y_pooled$df <- "pooled"
-edu_papsmearpast3y_pooled$df <- "pooled"
-```
-```{r combine edu}
-edu_cctestpast3y_df <- rbind(edu_cctestpast3y_bndhs,
-                      edu_cctestpast3y_zwdhs,
-                      edu_cctestpast3y_phia,
-                      edu_cctestpast3y_pooled)
-edu_cctestpast3y_df$Type <- "General CC Test"
-
-edu_papsmearpast3y_df <- rbind(edu_papsmearpast3y_ls9dhs,
-                        edu_papsmearpast3y_ls14dhs,
-                        edu_papsmearpast3y_sadhs,
-                        edu_papsmearpast3y_sabssm,
-                        edu_papsmearpast3y_whs,
-                        edu_papsmearpast3y_pooled)
-edu_papsmearpast3y_df$Type <- "Pap Smear"
-
-edu_testpast3y_df <- rbind(edu_cctestpast3y_df,
-                    edu_papsmearpast3y_df)
-
-edu_testpast3y_df <- left_join(edu_testpast3y_df, surveys)
-
-edu_testpast3y_df$Level = factor(edu_testpast3y_df$Level, levels = c("No Education", "Primary", "Secondary", "More than Secondary"))
-```
-```{r plots edu by region, fig.height = 9, fig.width = 8}
-ggplot(edu_testpast3y_df[!is.na(edu_testpast3y_df$Country) & edu_testpast3y_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years \namong all women 18-49 by education level\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(edu_testpast3y_df[!is.na(edu_testpast3y_df$Country) & edu_testpast3y_df$Type == "Pap Smear" & edu_testpast3y_df$Survey != "WHS",], 
-       aes(x = Country, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by education level") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(edu_testpast3y_df[!is.na(edu_testpast3y_df$Country) & edu_testpast3y_df$Type == "Pap Smear" & edu_testpast3y_df$Survey == "WHS",], 
-       aes(x = Country, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by education level") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(edu_testpast3y_df[edu_testpast3y_df$df == "pooled",], aes(x = Type, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested in the past 3 years \namong women 18-49 in SSA by education level\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-\newpage
-
-# Proportion cc tested in the past 3 years by literacy (only dhs has variable)
-```{r prop tested in past 3y by literacy function}
-#function for general cc testing
-literacy_cctestpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_test_past_3y) & !is.na(literacy))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~cc_test_past_3y, ~literacy, svyciprop, design = design, vartype = "ci", method = "beta")
-
-    results <- data.frame(Level = c("Cannot Read", "Able to read only parts of sentence", "Able to read whole sentence", "No card with required language", "Blind/Visually impaired"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-
-#function for pap smear
-literacy_papsmearpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y) & !is.na(literacy))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~pap_smear_past_3y, ~literacy, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-    if(nrow(m) != 5){
-      return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    }else{
-      results <- data.frame(Level = c("Cannot Read", "Able to read only parts of sentence", "Able to read whole sentence", "No card with required language", "Blind/Visually impaired"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-      return(results)
-    }
-  }
-}
-```
-```{r dhs lit}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-literacy_cctestpast3y_bndhs <- literacy_cctestpast3y(bndhs, 18, 49)
-literacy_cctestpast3y_bndhs$df <- "bndhs"
-
-#Lesotho
-literacy_papsmearpast3y_ls9dhs <- literacy_papsmearpast3y(ls9dhs, 18, 49)
-literacy_papsmearpast3y_ls9dhs$df <- "ls9dhs"
-
-literacy_papsmearpast3y_ls14dhs <- literacy_papsmearpast3y(ls14dhs, 18, 49)
-literacy_papsmearpast3y_ls14dhs$df <- "ls14dhs"
-
-#South Africa
-literacy_papsmearpast3y_sadhs <- literacy_papsmearpast3y(sadhs, 18, 49)
-literacy_papsmearpast3y_sadhs$df <- "sadhs"
-
-#Zimbabwe
-literacy_cctestpast3y_zwdhs <- literacy_cctestpast3y(zwdhs, 18, 49)
-literacy_cctestpast3y_zwdhs$df <- "zwdhs"
-```
-```{r pooled lit}
-literacy_cctestpast3y_pooled <- literacy_cctestpast3y(pooled_surveys1, 18, 49)
-literacy_papsmearpast3y_pooled <- literacy_papsmearpast3y(pooled_surveys1, 18, 49)
-
-literacy_cctestpast3y_pooled$df <- "pooled"
-literacy_papsmearpast3y_pooled$df <- "pooled"
-```
-```{r combine lit}
-literacy_cctestpast3y_df <- rbind(literacy_cctestpast3y_bndhs,
-                      literacy_cctestpast3y_zwdhs,
-                      literacy_cctestpast3y_pooled)
-literacy_cctestpast3y_df$Type <- "General CC Test"
-
-literacy_papsmearpast3y_df <- rbind(literacy_papsmearpast3y_ls9dhs,
-                        literacy_papsmearpast3y_ls14dhs,
-                        literacy_papsmearpast3y_sadhs,
-                        literacy_papsmearpast3y_pooled)
-literacy_papsmearpast3y_df$Type <- "Pap Smear"
-
-literacy_testpast3y_df <- rbind(literacy_cctestpast3y_df,
-                    literacy_papsmearpast3y_df)
-
-literacy_testpast3y_df <- left_join(literacy_testpast3y_df, surveys)
-
-literacy_testpast3y_df$Level <- factor(literacy_testpast3y_df$Level, levels = c("Cannot Read", "Able to read only parts of sentence", "Able to read whole sentence", "No card with required language", "Blind/Visually impaired"))
-```
-```{r plots lit by region, fig.height = 9, fig.width = 8}
-ggplot(literacy_testpast3y_df[!is.na(literacy_testpast3y_df$Country) & literacy_testpast3y_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years \namong all women 18-49 by literacy level\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(literacy_testpast3y_df[!is.na(literacy_testpast3y_df$Country) & literacy_testpast3y_df$Type == "Pap Smear" ,], 
-       aes(x = Country, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by literacy level") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(literacy_testpast3y_df[literacy_testpast3y_df$df == "pooled",], aes(x = Type, y = Prop, fill = Level)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested in the past 3 years \namong women 18-49 in SSA by literacy level \n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom", legend.text = element_text(size=6), legend.key.size = unit(0.5, 'cm'))
-```
-
-\newpage
-
-# Proportion cc tested in the past 3 years by marital status
-```{r prop tested in past 3y by married function}
-#function for general cc testing
-married_cctestpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_test_past_3y) & !is.na(marital_status))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~cc_test_past_3y, ~marital_status, svyciprop, design = design, vartype = "ci", method = "beta")
-
-    results <- data.frame(Status = c("Never Married", "Married", "Cohabiting", "Widowed", "Divorced/Separated"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-
-#function for pap smear
-married_papsmearpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y) & !is.na(marital_status))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~pap_smear_past_3y, ~marital_status, svyciprop, design = design, vartype = "ci", method = "beta")
-    
-      results <- data.frame(Status = c("Never Married", "Married", "Cohabiting", "Widowed", "Divorced/Separated"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-```
-```{r dhs mar}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-married_cctestpast3y_bndhs <- married_cctestpast3y(bndhs, 18, 49)
-married_cctestpast3y_bndhs$df <- "bndhs"
-
-#Lesotho
-married_papsmearpast3y_ls9dhs <- married_papsmearpast3y(ls9dhs, 18, 49)
-married_papsmearpast3y_ls9dhs$df <- "ls9dhs"
-
-married_papsmearpast3y_ls14dhs <- married_papsmearpast3y(ls14dhs, 18, 49)
-married_papsmearpast3y_ls14dhs$df <- "ls14dhs"
-
-#South Africa
-married_papsmearpast3y_sadhs <- married_papsmearpast3y(sadhs, 18, 49)
-married_papsmearpast3y_sadhs$df <- "sadhs"
-
-#Zimbabwe
-married_cctestpast3y_zwdhs <- married_cctestpast3y(zwdhs, 18, 49)
-married_cctestpast3y_zwdhs$df <- "zwdhs"
-```
-```{r phia mar}
-married_cctestpast3y_phia_list <- list(NA)
-married_cctestpast3y_phia <- data.frame(df = NA, Status = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- married_cctestpast3y(phia_list[[i]], 18, 49)
-  married_cctestpast3y_phia_list[[i]] <- df
-  married_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  married_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("married_cctestpast3y_", phia_names[i])
-  names(married_cctestpast3y_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm mar}
-#South Africa
-married_papsmearpast3y_sabssm <- married_papsmearpast3y(sabssm, 18, 49)
-married_papsmearpast3y_sabssm$df <- "sabssm"
-```
-```{r whs mar}
-married_papsmearpast3y_whs_list <- list(NA)
-married_papsmearpast3y_whs <- data.frame(df = NA, Status = NA)
-whs_names <- c("bfwhs", "chwhs", "ciwhs", "cmwhs", "cnwhs", "ethwhs", "ghwhs", 
-               "knwhs", "mawhs", "mlwhs", "mrtwhs", "muswhs", "nmwhs", 
-               "sawhs", "snwhs", "szwhs", "zmwhs", "zwwhs")
-
-n = 1
-for(i in 1:length(whs)){
-  df <- married_papsmearpast3y(whs_list[[i]], 18, 49)
-  married_papsmearpast3y_whs_list[[i]] <- df
-  married_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 2:5] <- df
-  married_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 1] <- whs_names[i]
-  
-  df_name <- paste0("married_papsmearpast3y_", whs_names[i])
-  names(married_papsmearpast3y_whs_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r pooled mar}
-married_cctestpast3y_pooled <- married_cctestpast3y(pooled_surveys1, 18, 49)
-married_papsmearpast3y_pooled <- married_papsmearpast3y(pooled_surveys1, 18, 49)
-
-married_cctestpast3y_pooled$df <- "pooled"
-married_papsmearpast3y_pooled$df <- "pooled"
-```
-```{r combine mar}
-married_cctestpast3y_df <- rbind(married_cctestpast3y_bndhs,
-                      married_cctestpast3y_zwdhs,
-                      married_cctestpast3y_phia,
-                      married_cctestpast3y_pooled)
-married_cctestpast3y_df$Type <- "General CC Test"
-
-married_papsmearpast3y_df <- rbind(married_papsmearpast3y_ls9dhs,
-                        married_papsmearpast3y_ls14dhs,
-                        married_papsmearpast3y_sadhs,
-                        married_papsmearpast3y_sabssm,
-                        married_papsmearpast3y_whs,
-                        married_papsmearpast3y_pooled)
-married_papsmearpast3y_df$Type <- "Pap Smear"
-
-married_testpast3y_df <- rbind(married_cctestpast3y_df,
-                    married_papsmearpast3y_df)
-
-married_testpast3y_df <- left_join(married_testpast3y_df, surveys)
-
-married_testpast3y_df$Status <- factor(married_testpast3y_df$Status, levels = c("Never Married", "Married", "Cohabiting", "Widowed", "Divorced/Separated"))
-```
-```{r plots mar, fig.height = 9, fig.width = 8}
-ggplot(married_testpast3y_df[!is.na(married_testpast3y_df$Country) & married_testpast3y_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years \namong all women 18-49 by married quintile\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(married_testpast3y_df[!is.na(married_testpast3y_df$Country) & married_testpast3y_df$Type == "Pap Smear" & married_testpast3y_df$Survey != "WHS",], 
-       aes(x = Country, y = Prop, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by married quintile") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(married_testpast3y_df[!is.na(married_testpast3y_df$Country) & married_testpast3y_df$Type == "Pap Smear" & married_testpast3y_df$Survey == "WHS",], 
-       aes(x = Country, y = Prop, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by married quintile") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(married_testpast3y_df[married_testpast3y_df$df == "pooled",], aes(x = Type, y = Prop, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested in the past 3 years \namong women 18-49 in SSA by married quintile\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom") 
-```
-
-\newpage
-
-# Proportion cc tested in the past 3 years by condom use at last sex
-```{r prop tested in past 3y by condom function}
-#function for general cc testing
-condom_cctestpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_test_past_3y) & !is.na(most_recent_condom_use))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~cc_test_past_3y, ~most_recent_condom_use, svyciprop, design = design, vartype = "ci", method = "beta")
-
-    results <- data.frame(CondomUseAtLastSex = c("No", "Yes"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-
-#function for pap smear
-condom_papsmearpast3y <- function(df, age1, age2){
-  sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y) & !is.na(most_recent_condom_use))
-  
-  if(nrow(sub_df) <= 1){
-    return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
-    
-  }else{
-    
-    design <- svydesign(data = sub_df, weights = ~weight, id = ~psu) #may need to add strata
-    m <- svyby(~pap_smear_past_3y, ~most_recent_condom_use, svyciprop, design = design, vartype = "ci", method = "beta")
-  
-    results <- data.frame(CondomUseAtLastSex = c("No", "Yes"),
-                          Prop = m[,2], Lower = m[,3], Upper = m[,4])
-    return(results)
-  }
-}
-```
-```{r dhs condom}
-age.groups <- data.frame(c(18), c(49))
-df <- data.frame(Age.Groups = "18-49")
-
-#Benin
-condom_cctestpast3y_bndhs <- condom_cctestpast3y(bndhs, 18, 49)
-condom_cctestpast3y_bndhs$df <- "bndhs"
-
-#Lesotho
-condom_papsmearpast3y_ls9dhs <- condom_papsmearpast3y(ls9dhs, 18, 49)
-condom_papsmearpast3y_ls9dhs$df <- "ls9dhs"
-
-condom_papsmearpast3y_ls14dhs <- condom_papsmearpast3y(ls14dhs, 18, 49)
-condom_papsmearpast3y_ls14dhs$df <- "ls14dhs"
-
-#South Africa
-condom_papsmearpast3y_sadhs <- condom_papsmearpast3y(sadhs, 18, 49)
-condom_papsmearpast3y_sadhs$df <- "sadhs"
-
-#Zimbabwe
-condom_cctestpast3y_zwdhs <- condom_cctestpast3y(zwdhs, 18, 49)
-condom_cctestpast3y_zwdhs$df <- "zwdhs"
-```
-```{r phia condom}
-condom_cctestpast3y_phia_list <- list(NA)
-condom_cctestpast3y_phia <- data.frame(df = NA, CondomUseAtLastSex = NA)
-phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
-
-n = 1
-for(i in 1:length(phia_list)){
-  df <- condom_cctestpast3y(phia_list[[i]], 18, 49)
-  condom_cctestpast3y_phia_list[[i]] <- df
-  condom_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 2:5] <- df
-  condom_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
-  
-  df_name <- paste0("condom_cctestpast3y_", phia_names[i])
-  names(condom_cctestpast3y_phia_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r sabssm condom}
-#South Africa
-condom_papsmearpast3y_sabssm <- condom_papsmearpast3y(sabssm, 18, 49)
-condom_papsmearpast3y_sabssm$df <- "sabssm"
-```
-```{r whs condom}
-condom_papsmearpast3y_whs_list <- list(NA)
-condom_papsmearpast3y_whs <- data.frame(df = NA, CondomUseAtLastSex = NA)
-whs_names <- c("bfwhs", "chwhs", "ciwhs", "cmwhs", "cnwhs", "ethwhs", "ghwhs", 
-               "knwhs", "mawhs", "mlwhs", "mrtwhs", "muswhs", "nmwhs", 
-               "sawhs", "snwhs", "szwhs", "zmwhs", "zwwhs")
-
-n = 1
-for(i in 1:length(whs)){
-  df <- condom_papsmearpast3y(whs_list[[i]], 18, 49)
-  condom_papsmearpast3y_whs_list[[i]] <- df
-  condom_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 2:5] <- df
-  condom_papsmearpast3y_whs[c(n:(n+nrow(df)-1)), 1] <- whs_names[i]
-  
-  df_name <- paste0("condom_papsmearpast3y_", whs_names[i])
-  names(condom_papsmearpast3y_whs_list)[i] <- df_name 
-  
-  n = n+nrow(df)
-}
-```
-```{r pooled condom}
-condom_cctestpast3y_pooled <- condom_cctestpast3y(pooled_surveys1, 18, 49)
-condom_papsmearpast3y_pooled <- condom_papsmearpast3y(pooled_surveys1, 18, 49)
-
-condom_cctestpast3y_pooled$df <- "pooled"
-condom_papsmearpast3y_pooled$df <- "pooled"
-```
-```{r combine condom}
-condom_cctestpast3y_df <- rbind(condom_cctestpast3y_bndhs,
-                      condom_cctestpast3y_zwdhs,
-                      condom_cctestpast3y_phia,
-                      condom_cctestpast3y_pooled)
-condom_cctestpast3y_df$Type <- "General CC Test"
-
-condom_papsmearpast3y_df <- rbind(condom_papsmearpast3y_ls9dhs,
-                        condom_papsmearpast3y_ls14dhs,
-                        condom_papsmearpast3y_sadhs,
-                        condom_papsmearpast3y_sabssm,
-                        condom_papsmearpast3y_whs,
-                        condom_papsmearpast3y_pooled)
-condom_papsmearpast3y_df$Type <- "Pap Smear"
-
-condom_testpast3y_df <- rbind(condom_cctestpast3y_df,
-                    condom_papsmearpast3y_df)
-
-condom_testpast3y_df <- left_join(condom_testpast3y_df, surveys)
-```
-```{r plots condom, fig.height = 9, fig.width = 8}
-ggplot(condom_testpast3y_df[!is.na(condom_testpast3y_df$Country) & condom_testpast3y_df$Type == "General CC Test",], aes(x = Country, y = Prop, fill = CondomUseAtLastSex)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion tested for CC in the past 3 years \namong all women 18-49 by condom use at last sex\n(excludes those who've reported pap smear only)") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(condom_testpast3y_df[!is.na(condom_testpast3y_df$Country) & condom_testpast3y_df$Type == "Pap Smear" & condom_testpast3y_df$Survey != "WHS",], 
-       aes(x = Country, y = Prop, fill = CondomUseAtLastSex)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by condom use at last sex") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(condom_testpast3y_df[!is.na(condom_testpast3y_df$Country) & condom_testpast3y_df$Type == "Pap Smear" & condom_testpast3y_df$Survey == "WHS",], 
-       aes(x = Country, y = Prop, fill = CondomUseAtLastSex)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by condom use at last sex") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(condom_testpast3y_df[condom_testpast3y_df$df == "pooled",], aes(x = Type, y = Prop, fill = CondomUseAtLastSex)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested in the past 3 years \namong women 18-49 in SSA by condom use at last sex\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom") 
-```
-
-
-\newpage
-
-# Proportion cc tested in the past 3 years by HIV status - changed the function so it always gives all ages - if i want specfic ages rmbr to change back
-```{r age settings}
-age.groups <- data.frame(c(15, 18, 15, 25, 30, 50, seq(15, 65, 5), 0), c(49, 49, 29, 49, 49, 1000, seq(19, 64, 5), 1000, 1000))
+# Proportion cc tested in the past 3 years by HIV status
+```{r hiv age settings}
+#set based on which age groups we want survey summary estimates from
+agegr <- data.frame(c(15, 18, 15, 25, 30, 50, seq(15, 65, 5), 0), c(49, 49, 29, 49, 49, 1000, seq(19, 64, 5), 1000, 1000))
 df <- data.frame(agegr = c(rep("15-49", 2),
                            rep("18-49", 2),
                            rep("15-29", 2), 
@@ -1298,16 +209,17 @@ df <- data.frame(agegr = c(rep("15-49", 2),
                            rep("55-59", 2),
                            rep("60-64", 2),
                            rep("65-1000", 2),
-                           rep("All",2)))
+                           rep("All", 2)))
+
+options(survey.lonely.psu="adjust")
 ```
 ```{r prop tested in past 3y by hiv function}
-options(survey.lonely.psu="adjust")
 #function for general cc testing
 hiv_cctestpast3y <- function(df, age1, age2){
   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(cc_test_past_3y) & !is.na(hivstat))
-  #sub_df <- filter(df, !is.na(cc_test_past_3y) & !is.na(hivstat))
+  #sub_df <- filter(df, !is.na(cc_test_past_3y) & !is.na(hivstat)) #used if no stratification by age needed
   
-  if(nrow(sub_df) <= 1){
+  if(nrow(sub_df) <= 1){ #done for age groups + hiv status that have 1 or less people
     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
     
   }else{
@@ -1325,7 +237,7 @@ hiv_papsmearpast3y <- function(df, age1, age2){
   sub_df <- filter(df, age >= age1 & age <= age2 & !is.na(pap_smear_past_3y) & !is.na(hivstat))
   #sub_df <- filter(df, !is.na(pap_smear_past_3y) & !is.na(hivstat))
   
-  if(nrow(sub_df) <= 1){
+  if(nrow(sub_df) <= 1){ #done for age groups + hiv status that have 1 or less people
     return(data.frame("Mean" = NA, "Lower" = NA, "Upper" = NA))
     
   }else{
@@ -1341,24 +253,23 @@ hiv_papsmearpast3y <- function(df, age1, age2){
 ```
 ```{r dhs hiv}
 #Cameroon
-hiv_cctestpast3y_cmdhs <- df_age_fig(age.groups, cmdhs, hiv_cctestpast3y, df)
+hiv_cctestpast3y_cmdhs <- df_age_fig(agegr, cmdhs, hiv_cctestpast3y, df)
 hiv_cctestpast3y_cmdhs$df <- "cmdhs"
 
 #Lesotho
-hiv_papsmearpast3y_ls9dhs <- df_age_fig(age.groups, ls9dhs, hiv_papsmearpast3y, df)
+hiv_papsmearpast3y_ls9dhs <- df_age_fig(agegr, ls9dhs, hiv_papsmearpast3y, df)
 hiv_papsmearpast3y_ls9dhs$df <- "ls9dhs"
 
-hiv_papsmearpast3y_ls14dhs <- df_age_fig(age.groups, ls14dhs, hiv_papsmearpast3y, df)
+hiv_papsmearpast3y_ls14dhs <- df_age_fig(agegr, ls14dhs, hiv_papsmearpast3y, df)
 hiv_papsmearpast3y_ls14dhs$df <- "ls14dhs"
 
 #South Africa
-hiv_papsmearpast3y_sadhs <- df_age_fig(age.groups, sadhs, hiv_papsmearpast3y, df)
+hiv_papsmearpast3y_sadhs <- df_age_fig(agegr, sadhs, hiv_papsmearpast3y, df)
 hiv_papsmearpast3y_sadhs$df <- "sadhs"
 
 #Zimbabwe
-hiv_cctestpast3y_zwdhs <- df_age_fig(age.groups, zwdhs, hiv_cctestpast3y, df)
+hiv_cctestpast3y_zwdhs <- df_age_fig(agegr, zwdhs, hiv_cctestpast3y, df)
 hiv_cctestpast3y_zwdhs$df <- "zwdhs"
-
 ```
 ```{r phia hiv}
 hiv_cctestpast3y_phia_list <- list(NA)
@@ -1367,7 +278,7 @@ phia_names <- c("ethphia", "mlphia", "rwphia", "tzphia", "zmphia", "zwphia")
 
 n = 1
 for(i in 1:length(phia_list)){
-  df <- df_age_fig(age.groups, phia_list[[i]], hiv_cctestpast3y, df)
+  df <- df_age_fig(agegr, phia_list[[i]], hiv_cctestpast3y, df)
   hiv_cctestpast3y_phia_list[[i]] <- df
   hiv_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 2:6] <- df
   hiv_cctestpast3y_phia[c(n:(n+nrow(df)-1)), 1] <- phia_names[i]
@@ -1380,28 +291,21 @@ for(i in 1:length(phia_list)){
 ```
 ```{r sabssm hiv}
 #South Africa
-hiv_papsmearpast3y_sabssm <- df_age_fig(age.groups, sabssm, hiv_papsmearpast3y, df)
+hiv_papsmearpast3y_sabssm <- df_age_fig(agegr, sabssm, hiv_papsmearpast3y, df)
 hiv_papsmearpast3y_sabssm$df <- "sabssm"
-```
-```{r pooled hiv}
-hiv_cctestpast3y_pooled <- df_age_fig(age.groups, pooled_surveys1, hiv_cctestpast3y, df)
-hiv_papsmearpast3y_pooled <- df_age_fig(age.groups, pooled_surveys1, hiv_papsmearpast3y, df)
-
-hiv_cctestpast3y_pooled$df <- "pooled"
-hiv_papsmearpast3y_pooled$df <- "pooled"
 ```
 ```{r combine hiv}
 hiv_cctestpast3y_df <- rbind(hiv_cctestpast3y_cmdhs,
                              hiv_cctestpast3y_zwdhs,
-                             hiv_cctestpast3y_phia,
-                             hiv_cctestpast3y_pooled)
+                             hiv_cctestpast3y_phia)
+                             #hiv_cctestpast3y_pooled)
 hiv_cctestpast3y_df$Type <- "General CC Test"
 
 hiv_papsmearpast3y_df <- rbind(hiv_papsmearpast3y_ls9dhs,
                                hiv_papsmearpast3y_ls14dhs,
                                hiv_papsmearpast3y_sadhs,
-                               hiv_papsmearpast3y_sabssm,
-                               hiv_papsmearpast3y_pooled)
+                               hiv_papsmearpast3y_sabssm)
+                               #hiv_papsmearpast3y_pooled)
 hiv_papsmearpast3y_df$Type <- "Pap Smear"
 
 hiv_testpast3y_df <- rbind(hiv_cctestpast3y_df,
@@ -1409,7 +313,8 @@ hiv_testpast3y_df <- rbind(hiv_cctestpast3y_df,
 
 hiv_testpast3y_df <- left_join(hiv_testpast3y_df, surveys)
 ```
-```{r plots hiv, fig.height = 9}
+
+```{r plots hiv by Country}
 a <- filter(hiv_testpast3y_df, agegr == "15-19" |
                              agegr == "20-24"| 
                              agegr == "25-29"|
@@ -1427,33 +332,12 @@ ggplot(a, aes(x=agegr, y = Mean, colour = Status, fill = Status)) +
   facet_wrap(~df)
 ```
 
-```{r, fig.height = 9, fig.width = 8}
-ggplot(hiv_testpast3y_df[!is.na(hiv_testpast3y_df$Country) & hiv_testpast3y_df$Type == "Pap Smear" & hiv_testpast3y_df$Survey != "WHS",], 
-       aes(x = Country, y = Prop, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion had pap smear in the past 3 years \namong all women 18-49 by HIV status") +
-  facet_grid(Survey~Year, scales = "free", space = "free") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom")
-```
-
-```{r, fig.height = 9, fig.width = 8}
-ggplot(hiv_testpast3y_df[hiv_testpast3y_df$df == "pooled",], aes(x = Type, y = Prop, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin=Lower, ymax=Upper), width=.5, position = position_dodge(0.9)) +
-  ylim(0,1) +
-  ggtitle("Proportion CC tested in the past 3 years \namong women 18-49 in SSA by HIV status\n(unweighted)") +
-  theme(axis.text.x = element_text(size = 8, angle = 90, hjust=0.95, vjust=0.2), legend.position = "bottom") 
-```
-
 ```{r save datasets}
-#hiv_testpast3y_1549_df <- hiv_testpast3y_df
 #load("CC Testing Past 3Y")
 save(testpast3y_df,
-     hiv_testpast3y_1849_df,
-     hiv_testpast3y_3049_df,
-     hiv_testpast3y_1549_df,
+     # hiv_testpast3y_1849_df,
+     # hiv_testpast3y_3049_df,
+     # hiv_testpast3y_1549_df,
      hiv_testpast3y_df,
      file = "CC Testing Past 3Y")
 ```
