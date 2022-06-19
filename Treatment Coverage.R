@@ -8,6 +8,7 @@ library(ggsci)
 library(GGally)
 library(readxl)
 library(matrixStats)
+library(survey)
 surveys <- read_excel("surveys.xlsx", sheet = 1)
 
 #' -----------------------------------------------------------------
@@ -33,34 +34,37 @@ dat_treatedsameday$treated_sameday[dat_treatedsameday$cc_treated == 0] <- 0
 
 #created grouped data set
 dat_treated <- filter(dat_treated, weight != 0)
-dat_group <- expand.grid(df = unique(dat_treated$df)); nrow(dat_group)
+dat_treated_pc <- filter(dat_treated, (Survey == "PHIA" & last_cc_test_result == 2) | (Survey == "STEPS" & last_cc_test_result == 3))
+
+dat_treated_to_use <- dat_treated_pc
+dat_group <- expand.grid(df = unique(dat_treated_to_use$df)); nrow(dat_group)
 
 #obtain the weighted proportions of ever testing for each survey 
 options(survey.lonely.psu = "adjust")
 for(i in 1:length(dat_group$df)){
-  a <- filter(dat_treated, df == dat_group$df[i])
+  a <- filter(dat_treated_to_use, df == dat_group$df[i])
   if(nrow(a) <= 1){
-    dat_treated$prop[dat_treated$df == dat_group$df[i]] <- NA
+    dat_treated_to_use$prop[dat_treated_to_use$df == dat_group$df[i]] <- NA
   } else{
     des <- svydesign(data = a, id = ~psu, weights = ~weight)
     prop <- as.numeric(svyciprop(~cc_treated, design = des)[1])
-    dat_treated$prop[dat_treated$df == dat_group$df[i]] <- prop
+    dat_treated_to_use$prop[dat_treated_to_use$df == dat_group$df[i]] <- prop
   }
   print(i)
 }
-design <- 2.0
-dat_treated_gr <- NULL
+design <- 1
+dat_treated_pc_gr <- NULL
 pb <- txtProgressBar(1, nrow(dat_group), style = 3)
 for (i in 1:nrow(dat_group)) {
   setTxtProgressBar(pb, i)
   dat_group_i <- data.frame(df = dat_group[i, ])
-  dat_i <- dat_treated[dat_treated$df == dat_group_i$df, ]
+  dat_i <- dat_treated_to_use[dat_treated_to_use$df == dat_group_i$df, ]
   dat_group_i$Country <- dat_i$Country[1]
   dat_group_i$den <- round(nrow(dat_i) / design)
   dat_group_i$num <- round(dat_i$prop[1]*dat_group_i$den) 
   dat_group_i$denominator_original <- nrow(dat_i)
   dat_group_i$numerator_original <- sum(dat_i$cc_treated)
-  dat_treated_gr <- rbind(dat_treated_gr, dat_group_i)    
+  dat_treated_pc_gr <- rbind(dat_treated_pc_gr, dat_group_i)    
 }
 
 cc_ltc_mod_re_gr <- '
@@ -94,11 +98,11 @@ transformed parameters{
 model{
   // priors
   // Overall Intercept
-  alpha ~ normal(0, 10);
+  alpha ~ normal(0, 5);
   
   // Random Intercepts by country
   re_country ~ normal(0, sd_re_country); // we center the random effect around the intercept (mean = alpha, and not 0)
-  sd_re_country ~ cauchy(0, 5) T[0, 10]; // half-Chauchy prior
+  sd_re_country ~ cauchy(0, 3) T[0, 10]; // half-Chauchy prior
   
   //likelihood
   num ~ binomial_logit(den, logit_prob); 
@@ -116,7 +120,7 @@ generated quantities{
 cc_ltc_stan_re_gr <- rstan::stan_model(model_code = cc_ltc_mod_re_gr)
 
 #Fit the model
-df_stan <- dat_treated_gr
+df_stan <- dat_treated_pc_gr
 
 #prep variables for stan model
 N <- nrow(df_stan)
@@ -146,12 +150,12 @@ data_stan <- list(N = N,
 # ---- Run model ----
 #' -----------------------------------------------------------------
 options(mc.cores = parallel::detectCores())
-fit <- rstan::sampling(cc_ltc_stan_re_gr, data = data_stan, iter = 5000, chains = 6, refresh = 50,
-                       warmup = 2500, thin = 1, control = list(adapt_delta = 0.99, max_treedepth = 15))
-save(data_stan, fit, df_stan, cc_ltc_stan_re_gr, file = "ltc_m5")
+fit <- rstan::sampling(cc_ltc_stan_re_gr, data = data_stan, iter = 5200, chains = 4, refresh = 50,
+                       warmup = 3000, thin = 1, control = list(adapt_delta = 0.999, max_treedepth = 15))
+save(data_stan, fit, df_stan, cc_ltc_stan_re_gr, file = "ltc_m8_pc")
 rstan::rstan_options(auto_write = TRUE)
 
-#load("ltc_m3")
+#load("ltc_m6_pc")
 #model parameters outputs/diagnostics
 rstan::stan_trace(fit, pars = c("alpha", "re_country", "sd_re_country"))
 rstan::summary(fit, pars = c("alpha", "re_country", "sd_re_country"), probs = c(0.025, 0.5, 0.975))$summary
@@ -177,6 +181,10 @@ colnames(pred_prob_df) <- c("Lower", "Prop", "Upper", "Country")
 load("CC Treatment")
 raw_prob <- cctreated_df[cctreated_df$Age.Groups == "All" &
                            !is.na(cctreated_df$Country), ]
+
+# raw_prob <- cctreated_pc_df[cctreated_pc_df$Age.Groups == "All" &
+#                            !is.na(cctreated_pc_df$Country), ]
+
 names(raw_prob)[names(raw_prob) == "Mean"] <- "Prop"
 # names(raw_prob)[names(raw_prob) == "Lower"] <- "raw_lower"
 # names(raw_prob)[names(raw_prob) == "Upper"] <- "raw_upper"
@@ -199,24 +207,21 @@ if(paper == T){
   df_combine <- rbind(raw_prob[,c("Country", "Prop", "Lower", "Upper", "Source")], pred_prob_df[,c("Country", "Prop", "Lower", "Upper", "Source")])
 }
 
-p <- ggplot(df_combine, aes(x = Country, y = Prop, fill = "red")) +
+p <- ggplot(df_combine, aes(x = Country, y = (Prop*100), fill = "red")) +
   geom_bar(stat = "identity", position = "dodge") +
-  geom_errorbar(aes(ymin = Lower, ymax = Upper), width = 0.5, position = position_dodge(0.9)) +
+  geom_errorbar(aes(ymin = Lower*100, ymax = Upper*100), width = 0.5, position = position_dodge(0.9)) +
   #geom_point(data = raw_prob, aes(y = raw_mean), colour = "darkgrey", size = 3) +
-  geom_hline(aes(yintercept = 0.9), linetype = "dashed") +
+  geom_hline(aes(yintercept = 90), linetype = "dashed") +
   #geom_pointrange(data = raw_prob, aes(y = raw_mean, ymin = raw_lower, ymax = raw_upper), colour = "darkgrey", size = 0.5) +
-  ylim(0, 1) +
-  ylab("Proportion") +
+  ylim(0, 100) +
+  ylab("Percentage (%)") +
   theme_bw() +
-  scale_fill_nejm() +
+  scale_fill_lancet() +
   theme(axis.text.x = element_text(size = 15),
         axis.text.y = element_text(size = 15),
         axis.title.x = element_text(size = 15),
         axis.title.y = element_text(size = 15),
         legend.position = "none");p
-  #scale_fill_brewer(palette = "Set3", labels = c("Cape Verde", "Malawi", "Tanzania", "Zambia", "Pooled")) +
-  # ggtitle("Proportion treated for CC among those who received a positive CC screening") +
-  # labs(subtitle = "Pooled value is weighted by the female population of the countries");p
 
-save(p, pred_prob_df, raw_prob, file = "pred_prob_ltc_m5")
-#load("pred_prob_ltc_m3")
+save(p, pred_prob_df, raw_prob, file = "pred_prob_ltc_m7_pc")
+#load("pred_prob_ltc_m6_pc")
